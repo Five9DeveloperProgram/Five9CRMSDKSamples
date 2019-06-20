@@ -1,0 +1,14 @@
+{
+  "name": "Demo-crm",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "app"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "gulp": "^3.9.1",
+    "browser-sync": "^2.14.0",
+    "minimist": "^1.2.0"
+  }
+}
