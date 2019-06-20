@@ -1,0 +1,21 @@
+<callCenter>
+	<section sortOrder="0" name="reqGeneralInfo" label="General Info">
+		<item sortOrder="0" name="reqInternalName" label="Five9 Domain Name">Five9DomainCRMSDKDemo</item>
+		<item sortOrder="1" name="reqDisplayName" label="Display Name">Five9 Domain CRM SDK demo</item>
+		<item sortOrder="2" name="reqDescription" label="Description"> Five9 is the leading global provider of on-demand call center software for telemarketing, customer service, and business continuity. The award-winning Five9 Virtual Call Center and Predictive Dialer serve customers of all sizes on five continents. Customers profit from Five9's reliable, robust functionality that is fast, easy, and affordable to deploy. For more information, visit www.five9.com.</item>
+		<item sortOrder="3" name="reqAdapterUrl" label="CTI Adapter URL">https://crm-sdk.five9lab.com/iframe_api_v2_cti.html</item>
+		<item sortOrder="4" name="reqUseApi" label="Use CTI API">true</item>
+		<item sortOrder="5" name="reqSoftphoneHeight" label="Softphone Height">600</item>
+		<item sortOrder="6" name="reqSoftphoneWidth" label="Softphone Width">550</item>
+		<item label="Salesforce Compatibility Mode" name="reqSalesforceCompatibilityMode" sortOrder="7">Lightning</item>
+	</section>
+	<section sortOrder="1" name="reqDialingOptions" label="Dialing Options">
+		<item sortOrder="0" name="reqOutsidePrefix" label="Outside Prefix">9</item>
+		<item sortOrder="1" name="reqLongDistPrefix" label="Long Distance Prefix">1</item>
+		<item sortOrder="2" name="reqInternationalPrefix" label="International Prefix">01</item>
+	</section>
+	<section sortOrder="2" name="Five9Info" label="Five9 Info">
+		<item sortOrder="0" name=" createdByFive9User" label="Created By Five9 User">five9</item>
+		<item sortOrder="1" name=" createdOn" label="Created On">Tue Dec 11 22:55:59 UTC 2018</item>
+	</section>
+</callCenter>

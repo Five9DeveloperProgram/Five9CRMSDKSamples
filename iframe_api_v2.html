@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+  <meta charset="UTF-8">
+  <title>IFrame API</title>
+  <script type="text/javascript" src="libs/five9.crm.sdk.js"></script>
+</head>
+<body>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+      var interactionApi = window.Five9.CrmSdk.interactionApi();
+      var customComponentsApi = window.Five9.CrmSdk.customComponentsApi();
+      var crmApi = window.Five9.CrmSdk.crmApi();
+
+      // =======CRM API=======
+    crmApi.registerApi({
+          getAdtConfig: function (params) {
+              var config = {
+                  providerName: 'Demo CRM ADT adapter',
+                  myCallsTodayEnabled: true,
+                  myChatsTodayEnabled: true,
+                  myEmailsTodayEnabled: true,
+                  showContactInfo: false
+              };
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              return Promise.resolve(config);
+          },
+          search: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              var crmObjects = [{id: "123", label: "Contact", name: "Joe", isWho: true, isWhat: false, fields:[{displayName: "Company", value: "ABC"}]}];
+              return Promise.resolve({crmObjects: crmObjects, screenPopObject: crmObjects[0]}); 
+
+          },
+          saveLog: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          screenPop: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          getTodayCallsCount: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              return Promise.resolve(77);
+          },
+          getTodayChatsCount: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              return Promise.resolve(77);;
+          },
+          getTodayEmailsCount: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              return Promise.resolve(11);;
+          },
+          openMyCallsToday: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          openMyChatsToday: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          contactSelected: function (contactModel) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          enableClickToDial: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          disableClickToDial: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          }
+      });
+
+
+      // ======Interaction API EVENTS========
+      interactionApi.subscribe({
+          callStarted: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              setCallId(params.callData.interactionId);
+          },
+
+          callFinished: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+              setCallId('');
+          },
+
+          callAccepted: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          callRejected: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          callEnded: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          emailOffered: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          emailAccepted: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          emailRejected: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          emailFinished: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          chatOffered: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+          chatAccepted: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          chatRejected: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          chatEnded: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          },
+
+          chatFinished: function (params) {
+              debugStream.debug({
+                  callee: arguments.callee.name,
+                  data: params
+              });
+          }
+      });
+
+      //======== F9 API REGISTRATION======
+        window.Five9.CrmSdk.customComponentsApi().registerCustomComponents({template: `<adt-components>
+          <adt-component location="3rdPartyComp-li-call-tab" label="3rdPartyComp-li-call-tab" style="flex-direction: column">
+            <adt-input value="Initial value" id="aaa1" name="input1" label="Credit card1" placeholder="this is placeholder1"
+                       onchange="callTabInputCallback"></adt-input>
+            <adt-btn-group label="Group of buttons">
+                <!-- comments are ignored and styles are filtered by whitelisting -->
+                <adt-button name="button1" label="Yes" class="btnPrimary" style="flex-grow: 1; justify-content: center;"
+                            onclick="callTabYesCallback">Yes</adt-button>
+                <adt-button name="button2" label="No" class="btnSecondary" style="flex-grow: 1"
+                            onclick="callTabNoCallback"></adt-button>
+            </adt-btn-group>
+          </adt-component>
+          <adt-component location="3rdPartyComp-li-call-details-bottom" label="3rdPartyComp-li-call-details-bottom" style="flex-direction: row; justify-content: space-between; align-items: flex-end;">
+            <adt-input value="Initial value" name="input2" label="Credit card2" placeholder="this is placeholder1"
+                       onchange="callDetailsInputCallback"></adt-input>
+            <adt-button name="button3" label="Verify" class="btnPrimary" style="justify-content: center;"
+                        onclick="callDetailsButtonCallback"></adt-button>
+          </adt-component>
+        </adt-components>
+        `,
+        callbacks: {
+          callTabInputCallback: function(params){
+            debugStream.debug({
+              callee: arguments.callee.name,
+              data: params
+            });
+           
+          },
+
+          callTabYesCallback: function(params){
+            debugStream.debug({
+              callee: arguments.callee.name,
+              data: params
+            });
+           
+          },
+          callTabNoCallback: function(params){
+            debugStream.debug({
+              callee: arguments.callee.name,
+              data: params
+            });
+           
+          },
+          callDetailsInputCallback: function(params){
+            debugStream.debug({
+              callee: arguments.callee.name,
+              data: params
+            });
+           
+          },
+          callDetailsButtonCallback: function(params){
+            debugStream.debug({
+              callee: arguments.callee.name,
+              data: params
+            });
+           
+          }
+      }}); 
+      
+    
+      function clearList(list) {
+          var listNode = document.getElementById(list);
+          while (listNode.lastChild) {
+              listNode.removeChild(listNode.lastChild);
+          }
+      }
+
+      function setCallId(callId) {
+          document.getElementById('callId').innerHTML = callId;
+      }
+
+      function getCallId() {
+          return document.getElementById('callId').innerHTML;
+      }
+
+      var debugStream = {
+          debug: function (arg) {
+              console.debug("IframeV2: " + JSON.stringify(arg));
+              updateListComponent('events_list', [arg]);
+          }
+      };
+
+      var updateListComponent = function (name, params) {
+          if (params && params.length > 0) {
+              var list = document.getElementById(name);
+              for (var i = 0; i < params.length; i++) {
+                  list.insertAdjacentHTML('beforeend', '<li>' + JSON.stringify(params[i]) + '</li>');
+              }
+          }
+      };
+
+      var reset_btn = document.getElementById('reset_btn');
+      reset_btn.addEventListener('click', function () {
+          clearList('cav_list');
+          clearList('disp_list');
+          clearList('events_list');
+      });
+
+      var get_btn = document.getElementById('get_btn');
+      get_btn.addEventListener('click', function () {
+          clearList('cav_list');
+
+          interactionApi.getCav({interactionId: getCallId()}).then(function (cavList) {
+              console.debug('IframeV2 got cavList: ' + JSON.stringify(cavList));
+              updateListComponent('cav_list', cavList);
+          });
+      });
+
+      var set_cav_btn = document.getElementById('set_cav_btn');
+      set_cav_btn.addEventListener('click', function () {
+          var cavId = document.getElementById('cavId').value;
+          var cavValue = document.getElementById('cavValue').value;
+
+          interactionApi.getCav({interactionId: getCallId()}).then(function (cavList) {
+              console.debug('IframeV2 got cavList: ' + JSON.stringify(cavList));
+              updateListComponent('cav_list', cavList);
+
+
+              console.debug('IframeV2 set cavList: ' + JSON.stringify(cavList));
+              interactionApi.setCav({interactionId: getCallId(), cavList: [{id: cavId, value: cavValue}]});
+          });
+      });
+
+      var get_disp_btn = document.getElementById('get_disp_btn');
+      get_disp_btn.addEventListener('click', function () {
+          clearList('disp_list');
+
+          interactionApi.getDispositions({interactionType: 'Call', interactionId: getCallId()}).then(function (dispList) {
+              console.debug('IframeV2 got dispList: ' + JSON.stringify(dispList));
+              updateListComponent('disp_list', dispList);
+          });
+      });
+
+      var set_disp_btn = document.getElementById('set_disp_btn');
+      set_disp_btn.addEventListener('click', function () {
+          var dispId = document.getElementById('dispId').value;
+          interactionApi.setDisposition({interactionType: 'Call', interactionId: getCallId(), dispositionId: dispId});
+      });
+
+      var c2d_btn = document.getElementById('c2d_btn');
+      c2d_btn.addEventListener('click', function () {
+          var num = document.getElementById('c2dNum').value;
+          crmApi.click2dial({click2DialData: {clickToDialNumber: num}});
+          //crmApi.click2dial({click2DialData: {clickToDialNumber: num, crmObject: {id: "789", label: "Account", name: "XYZ", isWho: false, isWhat: true}}});
+          
+      });
+      
+      var objectVisited_btn = document.getElementById('objectVisited_btn');
+          objectVisited_btn.addEventListener('click', function () {
+          crmApi.objectVisited({crmObject: {id: "456", label: "Case", name: "Broken microwave", isWho: false, isWhat: true}});
+      });
+
+      var suggestedNumbers_btn = document.getElementById('suggestedNumbers_btn');
+      
+      suggestedNumbers_btn.addEventListener('click', function () {
+            crmApi.suggestedNumbers(
+              {suggestedNumbers: [
+                {clickToDialNumber:"9250000111", crmObject: {id: "441", label: "Case", name: "Engine broken", isWho: false, isWhat: true}},
+                {clickToDialNumber:"9250000112", crmObject: {id: "789", label: "Account", name: "XYZ", isWho: false, isWhat: true}},
+                {clickToDialNumber:"9250000113", crmObject: {id: "731", label: "Contact", name: "Tim", isWho: true, isWhat: false}}]});
+      });
+});
+</script>
+
+<div class="panel-body">
+    <iframe id="iframe-api-v2-panel" src="https://app.five9.com/clients/integrations/adt.li.main.html?f9crmapi=true&f9verticalthreshold=300px" style="position: relative; float: right; height: 600px; width: 299px"></iframe>
+</div>
+
+
+<p>Call Variables for callId: </p> <p id='callId'></p>
+<button id="get_btn">Get Cav</button>
+</br>
+<div class="setCav">
+    <button id="set_cav_btn">Set Call Variable</button>
+    <input type="text" id="cavId" name="cavId" placeholder="enter Cav Id" />
+    <input type="text" id="cavValue" name="cavValue" placeholder="enter Cav Value" />
+</div>
+</br>
+<div class="getDispositions">
+    <button id="get_disp_btn">Get Dispositions</button>
+</div>
+<div class="setDisposition">
+    <button id="set_disp_btn">Set Disposition</button>
+    <input type="text" id="dispId" name="dispId" placeholder="enter Disposition Id" />
+</div>
+</br>
+<div class="c2d">
+    <button id="c2d_btn">Click to Dial</button>
+    <input type="text" id="c2dNum" name="c2dNum" placeholder="enter number" />
+</div>
+</br>
+<div class="objectVisited">
+    <button id="objectVisited_btn">objectVisited</button>
+</div>
+</br>
+<div class="suggestedNumbers">
+    <button id="suggestedNumbers_btn">suggestedNumbers</button>
+</div>
+
+</br>
+
+<button id="reset_btn">Reset</button>
+
+
+<p>Dispositions:</p>
+<ul id="disp_list"></ul>
+
+<p>Call Variables:</p>
+<ul id="cav_list"></ul>
+
+<p>Events:</p>
+<ul id="events_list"></ul>
+
+</body>
+</html>
+
+

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+  <meta charset="UTF-8">
+  <title>IFrame API</title>
+  <script type="text/javascript" src="libs/five9.crm.sdk.js"></script>
+  <script type="text/javascript" src="libs/lightningInteraction.js"></script>
+  <style>
+    #five9-adapter {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 45px);
+    }
+   </style>
+</head>
+<body>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+      var crmApi = window.Five9.CrmSdk.crmApi();
+
+      var callsCount = 0; 
+
+      // register CRM API event callbacks
+      crmApi.registerApi({
+          getAdtConfig: function (params) {
+              var config = {
+                  providerName: 'Demo CRM ADT adapter',
+                  myCallsTodayEnabled: true,
+                  myChatsTodayEnabled: true,
+                  myEmailsTodayEnabled: false,
+                  showContactInfo: false,
+              };
+              return Promise.resolve(config);
+          },
+          search: function (params) {
+              var pr = new Promise(function (resolve, reject) {
+                  sforce.opencti.searchAndScreenPop({
+                      searchParams: params.interactionData.number,
+                      queryParams: `PhoneNumber=${params.Number}`,
+                      callType: sforce.opencti.CALL_TYPE.OUTBOUND,
+                      deferred: true,
+                      callback: function (result) {
+                          if (result.success) {
+                              console.log(result.returnValue);
+
+                              var foundObjects = [];
+                              for (var property in result.returnValue) {
+                                  if (result.returnValue.hasOwnProperty(property)) {
+                                      if (property !== 'SCREEN_POP_DATA'){
+                                          var newItem={};
+                                          var id = result.returnValue[property].Id;
+                                          newItem.id = id && id.slice(0, 15);
+                                          newItem.name = result.returnValue[property].Name;
+                                          newItem.label = result.returnValue[property].RecordType;
+                                          newItem.isWho = true;
+                                          newItem.isWhat = false;
+
+                                          foundObjects.push(newItem);
+                                      }
+                                  }
+                              }
+
+                              var screenPop = null;
+                              if (foundObjects.length === 1){
+                                  screenPop = foundObjects[0];
+                              }
+                              resolve({crmObjects:foundObjects, screenPopObject: screenPop});
+                              console.log(result.returnValue);
+                          } else {
+                              console.log(result.errors);
+                              reject();
+                          }
+
+                      }
+                  });
+              });
+              return pr;
+          },
+          saveLog: function (params) {
+              sforce.opencti.saveLog({
+                  value: {
+                    entityApiName: "Task",
+                    WhoId: params.interactionLogData.who ? params.interactionLogData.who.id : null,
+                    WhatId: params.interactionLogData.what ? params.interactionLogData.what.id : null,
+                    CallType: getSFCallType(params.interactionData.callType),
+                    ActivityDate: getActivityDate(),
+                    Status: "Completed",
+                    CallDisposition: params.interactionLogData.dispositionName,
+                    Description: params.interactionLogData.comments,
+                    Subject: params.interactionLogData.subject,
+                    CallDurationInSeconds: params.interactionLogData.duration
+                  },
+                  callback: function (result) {
+                      if (result.success) {
+                          callsCount++; 
+                          console.log(result.returnValue);
+                      } else {
+                          console.log(result.errors);
+                      }
+                 }
+              });
+          },
+          screenPop: function (params) {
+              var object = params.crmObject;
+              if (object.id) {
+                  object = {type: sforce.opencti.SCREENPOP_TYPE.SOBJECT, params: {recordId: object.id}};
+              } else {
+                  object = {type: sforce.opencti.SCREENPOP_TYPE.SOBJECT ,params : { recordId: object}};
+              }
+              sforce.opencti.screenPop(object);
+          },
+          getTodayCallsCount: function (params) {
+              return callsCount;
+          },
+          getTodayChatsCount: function (params) {
+              return 88;
+          },
+          openMyCallsToday: function (params) {
+          },
+          openMyChatsToday: function (params) {
+          },
+          enableClickToDial: function (params) {
+              sforce.opencti.enableClickToDial();
+          },
+          disableClickToDial: function (params) {
+              sforce.opencti.disableClickToDial();
+          }
+      });
+
+
+
+      //subscribe to Salesforce Open CTI events and execute CRM API methods based on Salesforce events 
+      sforce.opencti.onClickToDial({
+          listener: function (payload) {
+            var click2DialData = {
+              clickToDialNumber: payload.number,
+              screenpopC2DSearch: true,
+              crmObject: {
+                id: payload.recordId,
+                label: payload.objectType,
+                name: payload.recordName,
+                isWho: payload.objectType === "Contact",
+                isWhat: payload.objectType === "Case"
+              }
+            };
+            crmApi.click2dial({click2DialData: click2DialData});
+          }
+      });
+
+      sforce.opencti.onNavigationChange({
+          listener: function (response){
+            if (isNavigationEventValid({result: JSON.stringify(response)})){
+                var item = convertSearchResults(response);
+                if (item.id) {
+                    crmApi.objectVisited({crmObject: item});
+                }
+            }
+          }
+      });
+
+      //utility functions
+
+      function isNavigationEventValid(response) {
+          if (response.result) {
+              let result = JSON.parse(response.result);
+              return !result.recordId || (result.recordId && result.url && result.url.indexOf(result.recordId) > -1);
+          }
+          return true;
+      }
+
+      var getActivityDate = function()
+      {
+              var today = new Date();
+              var dd = today.getDate();
+              var mm = today.getMonth() + 1; //January is 0!
+
+              var yyyy = today.getFullYear();
+              if (dd < 10) {
+                  dd = '0' + dd;
+              }
+              if (mm < 10) {
+                  mm = '0' + mm;
+              }
+              return today = yyyy + '-'+mm+'-'+dd;
+       }
+      var getSFCallType = function (calltype) {
+          calltype = calltype.toUpperCase();
+          switch (calltype) {
+              case 'INBOUND':
+                  return 'Inbound';
+              case 'INTERNAL':
+                  return 'Internal';
+              default:
+                  return "Outbound";
+          }
+      };
+
+      var convertSearchResults = function(rawResults){
+          var id = rawResults.recordId;
+          var newItem = {};
+          newItem.id = id && id.slice(0, 15);
+          newItem.name = rawResults.recordName;
+          newItem.label = rawResults.objectType;
+          newItem.isWho = rawResults.objectType === "Contact";
+          newItem.isWhat = rawResults.objectType === "Case";;
+
+          return newItem;
+      };
+      
+  });
+</script>
+
+<div>
+    <iframe id='five9-adapter' src="https://app.five9.com/clients/integrations/adt.li.main.html?f9crmapi=true" frameborder='0'></iframe>
+</div>
+</body>
+</html>
