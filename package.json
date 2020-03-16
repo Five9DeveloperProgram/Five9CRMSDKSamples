@@ -9,6 +9,6 @@
   "devDependencies": {
     "gulp": "^3.9.1",
     "browser-sync": "^2.14.0",
-    "minimist": "^1.2.0"
+    "minimist": "^1.2.2"
   }
 }
