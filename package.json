@@ -7,7 +7,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "gulp": "^3.9.1",
+    "gulp": "^4.0.2",
     "browser-sync": "^2.14.0",
     "minimist": "^1.2.0"
   }
