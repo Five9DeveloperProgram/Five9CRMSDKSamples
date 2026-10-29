@@ -4,6 +4,21 @@
 
 Try it in your browser without cloning this repository or installing anything locally.
 
+## DISCLAIMER
+
+This repository contains sample code which is **not an official Five9 resource**. It is intended solely for educational and illustrative purposes to demonstrate possible ways to interact with Five9 APIs.
+
+Under the [MIT License](LICENSE):
+
+- This is **not** officially endorsed or supported software by Five9.
+- Any customizations, modifications, or deployments made with this code are done at your **own risk** and **sole responsibility**.
+- The code may not account for all use cases or meet specific requirements without further development.
+- Five9 assumes **no liability** and provides **no support** for issues arising from the use of this code.
+
+For production-ready tailored implementations, we strongly recommend working with Five9’s Professional Services and Technical Account Management teams.
+
+## About the testbed
+
 Explore how the [Five9 CRM SDK](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/index.html) connects a CRM page to the Five9 Agent Desktop Toolkit. This interactive sample hosts the adapter alongside a mock CRM so you can inspect events, try SDK methods, and see how callbacks and hooks affect an interaction.
 
 The implementation is contained in [embedded-sample-2026.html](embedded-sample-2026.html), using plain JavaScript and the SDK from Five9's stable CDN. Read the sample alongside the event log to follow requests and responses.
