@@ -1,5 +1,9 @@
 # Five9 CRM SDK Testbed
 
+**[Open the live testbed](https://five9developerprogram.github.io/Five9CRMSDKSamples/)**
+
+Try it in your browser without cloning this repository or installing anything locally.
+
 Explore how the [Five9 CRM SDK](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/index.html) connects a CRM page to the Five9 Agent Desktop Toolkit. This interactive sample hosts the adapter alongside a mock CRM so you can inspect events, try SDK methods, and see how callbacks and hooks affect an interaction.
 
 The implementation is contained in [embedded-sample-2026.html](embedded-sample-2026.html), using plain JavaScript and the SDK from Five9's stable CDN. Read the sample alongside the event log to follow requests and responses.
