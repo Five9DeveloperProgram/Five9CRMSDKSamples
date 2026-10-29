@@ -33,6 +33,52 @@ async function signIn(page) {
     await page.evaluate(() => window.testSdk.application.loginStateChanged({ state: 'WORKING' }));
 }
 
+test('Brad mode is opt-in, reversible, and leaves SDK state alone', async ({ page }) => {
+    const party = page.locator('#bradParty');
+    await expect(party).toBeHidden();
+    await page.locator('#adapterUrl').fill('brad');
+    await page.locator('#adapterUrl').pressSequentially('brad');
+    await expect(party).toBeHidden();
+    await page.locator('#adapterUrl').fill('https://app.five9.com/clients/integrations/adt.main.html');
+    await page.locator('h1').click();
+    await page.keyboard.type('brad');
+    await expect(party).toBeVisible();
+    await expect(page.locator('#adapterFrame')).not.toHaveAttribute('src');
+    expect(await page.evaluate(() => window.testSdk.calls)).toEqual([]);
+    await page.locator('#bradThought').click();
+    await expect(page.locator('#bradQuip')).toContainText('callback');
+    await page.locator('#bradPause').check();
+    await expect(page.locator('.party-computer')).toHaveCSS('animation-play-state', 'paused');
+    await page.locator('#bradPause').uncheck();
+    await expect(page.locator('.party-computer')).toHaveCSS('animation-play-state', 'running');
+    await page.locator('#bradExit').click();
+    await expect(party).toBeHidden();
+    await expect(page.locator('.section-toggle').first()).toBeFocused();
+    await page.keyboard.type('brad');
+    await expect(party).toBeVisible();
+    await page.keyboard.type('brad');
+    await expect(party).toBeHidden();
+    await signIn(page);
+    await page.keyboard.type('brad');
+    await expect(page.locator('#clickToDialButton')).toBeEnabled();
+    await expect(page.locator('#adapterFrame')).toHaveAttribute('src', /adt\.main\.html/);
+});
+
+test('Brad mode supports mobile links and reduced motion', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/embedded-sample-2026.html?fun=brad&keep=yes');
+    await expect(page.locator('#bradParty')).toBeVisible();
+    await expect(page.locator('.party-computer')).toHaveCSS('animation-name', 'none');
+    const bounds = await page.locator('#bradParty').boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await page.locator('#bradExit').click();
+    await expect(page).toHaveURL(/\?keep=yes$/);
+    await page.reload();
+    await expect(page.locator('#bradParty')).toBeHidden();
+});
+
 test('preview serves only the staged testbed', async ({ request }) => {
     const root = await request.get('/');
     expect(root.status()).toBe(200);
