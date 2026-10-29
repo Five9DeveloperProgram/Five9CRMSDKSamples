@@ -1,54 +1,37 @@
 # Five9 CRM SDK Testbed
 
-[embedded-sample-2026.html](embedded-sample-2026.html) is the primary sample: a standalone mock CRM hosting the Five9 Agent Desktop Toolkit in an iframe. It uses the [current CRM SDK](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/index.html) from Five9's stable CDN. No application framework, backend, or build step is required.
+Explore how the [Five9 CRM SDK](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/index.html) connects a CRM page to the Five9 Agent Desktop Toolkit. This interactive sample hosts the adapter alongside a mock CRM so you can inspect events, try SDK methods, and see how callbacks and hooks affect an interaction.
+
+The implementation is contained in [embedded-sample-2026.html](embedded-sample-2026.html), using plain JavaScript and the SDK from Five9's stable CDN. Read the sample alongside the event log to follow requests and responses.
+
+## Start exploring
+
+You can explore synthetic CRM state and hook simulations without signing in to Five9. Live adapter features require a Five9 account, appropriate domain permissions, and a configured station and campaign. Internet access is required to load the SDK and page styling.
+
+### Try a hook without a live call
+
+1. Leave **Hook API** enabled and find the **Hook samples** section.
+2. Enable **Before Disposition Sample** or **Before Click-to-Dial Sample**.
+3. Select the corresponding **Simulate** button to inspect a fictional request.
+4. Choose **Proceed**, or enter a reason and select **Reject**.
+5. Inspect **Latest sample decision** and the Hook entries in the event log to see the returned SDK response.
+
+Simulations do not call the adapter, place calls, or change dispositions. You can also add synthetic activity, adjust the mock CRM counters, and select the search response the CRM will return during live interactions.
+
+**Use a test account and approved test phone numbers. Live SDK actions can place real calls, change call data, or finish interactions.**
 
 ## Run locally
 
-Install [Node.js 22 or newer](https://nodejs.org), then run:
+Clone or download this repository and install [Node.js 22 or newer](https://nodejs.org). From the repository directory, run:
 
 ```sh
 npm install
 npm start
 ```
 
-The server opens <http://localhost:8080/embedded-sample-2026.html>. It listens only on localhost, disables caching, and requires no hosts-file entry. Startup copies only the testbed into the generated `_site/` directory, which is the server's document root. Repository metadata, dependencies, and tests are not served. Stop it with Ctrl+C. For another port:
+The testbed opens at <http://localhost:8080/embedded-sample-2026.html>. Stop the server with Ctrl+C. For another port, use `npm start -- -p 8081`.
 
-```sh
-npm start -- -p 8081
-```
-
-After editing the source HTML, run `npm run prepare:site` and refresh the browser, or restart `npm start`. The staging command replaces `_site/`; do not store source files or certificates there. This is only a file-copy step, not a bundler or compiler.
-
-The page requires internet access for the SDK and Tailwind CSS. Live adapter testing also requires a Five9 account, appropriate domain permissions, and a configured station/campaign. Node serves the files; it does not proxy Five9 traffic or store credentials.
-
-HTTP localhost is the simplest starting point and is treated as a trustworthy origin by modern browsers. This does not guarantee every embedded softphone, SSO, or CRM workflow will work over HTTP. Use trusted HTTPS when required, and test against your actual browser and tenant policies. Opening the page directly with `file://` is not the supported workflow.
-
-### Optional trusted HTTPS
-
-Install [mkcert](https://github.com/FiloSottile/mkcert) and follow its instructions to install a local certificate authority. From this repository, generate certificates **outside the served directory**:
-
-```sh
-mkcert -install
-mkcert -cert-file ../five9-localhost.pem -key-file ../five9-localhost-key.pem localhost 127.0.0.1 ::1
-npm run start:https
-```
-
-Open <https://localhost:8080/embedded-sample-2026.html>. Certificate trust setup may require administrator approval on your machine. Never commit private keys, put them in the served directory, disable TLS verification, or rely on clicking through certificate warnings for embedded integrations.
-
-## Host on GitHub Pages
-
-GitHub Pages provides HTTPS hosting for this static testbed without running Node on a server. The [deployment workflow](.github/workflows/pages.yml) runs the browser tests and publishes only the testbed and its `index.html` alias. It does not publish dependencies, tests, or local certificates.
-
-1. Commit and push these changes to your GitHub repository.
-2. In **Settings > Pages > Build and deployment**, select **GitHub Actions** as the source. Repository admin access and an organization policy/plan that permits Pages are required.
-3. In **Actions**, select **Test and deploy testbed to GitHub Pages**, then **Run workflow** on `main`. Future pushes to `main` also deploy automatically. If your fork uses another default branch, update the workflow's branch filter.
-4. Open the URL shown by the successful deployment. For this repository, the expected default address is <https://five9developerprogram.github.io/Five9CRMSDKSamples/>.
-
-The address is not live merely because the workflow exists. Pages must be enabled and a deployment must succeed. No personal access token or Five9 secret is needed in the workflow; deployment uses GitHub's built-in token.
-
-Treat the hosted page as public unless your organization has explicitly configured Pages access control. Use synthetic CRM data. Never hardcode passwords, access tokens, customer records, or sensitive SSO URLs in the source. Adapter authentication remains with Five9/your IdP; this page is not an authentication service. SDK payloads shown in the browser can contain customer information, so handle screenshots and copied logs accordingly.
-
-HTTPS hosting does not bypass Five9/IdP framing restrictions, browser storage policies, microphone permissions, or CRM trusted-origin requirements. Validate those with the exact deployed origin. The SDK's `stable` CDN URL is intentionally a moving version for exploration, not a reproducible SDK pin.
+Some sign-in or embedded softphone workflows require trusted HTTPS. See the [development and hosting guide](DEVELOPMENT.md#trusted-local-https) for setup. Opening the HTML directly with `file://` is not the supported workflow.
 
 ## Explore the SDK
 
@@ -82,17 +65,12 @@ Dismissing the dialog, disabling a pending sample, resetting/unloading the adapt
 
 Synthetic activity and counters live in page memory and reset on refresh. Each `saveLog` callback increments a counter; this is not persistent or deduplicated CRM storage. Search results are fictional, and screen pops are logged rather than navigating a real CRM. Use a test account and test phone numbers for live SDK actions.
 
-## Tests and verification
+## Sample limitations
 
-```sh
-npm ci
-npx playwright install chromium
-npm test
-```
-
-Tests start their own loopback server on port 8090 and use a fake SDK/adapter, without Five9 credentials or external CDN access. They cover all 32 regional presets, default hooks, custom URLs, URL and SSO encoding, session readiness, call targeting, confirmation/cancellation, stale responses, suggested numbers, and component/hook registration. They do not certify live Five9 or Salesforce behavior.
-
-Before sharing an integration, check live login/logout, click-to-dial enable/disable, call wrap-up/disposition, call-variable writes, search/screen-pop callbacks, hook/component rendering, and unload/reload. Separately validate SSO, browser audio permissions, and the deployed HTTPS origin with your tenant.
+- This is a learning and integration-testing sample, not a production CRM integration.
+- Browser microphone permissions, storage policies, IdP framing restrictions, and your organization's trusted-origin requirements still apply, including on HTTPS.
+- SDK payloads may contain customer information. Use synthetic data where possible and handle screenshots and copied logs accordingly. Never hardcode credentials or sensitive customer data in the sample.
+- The SDK's `stable` CDN URL follows Five9 updates rather than pinning a specific version. Validate behavior with your browser, tenant, and adapter before adapting the sample for production.
 
 ## SDK documentation
 
@@ -100,6 +78,12 @@ Before sharing an integration, check live login/logout, click-to-dial enable/dis
 - [Configuring adapter URL parameters](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/tutorial-adturlparams.html)
 - [Custom UI components](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/tutorial-customcomponents.html)
 - [Building a proxy page](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/tutorial-proxypage.html)
+- [Hook callbacks](https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/HookApiCallbacks.html)
+
+For source changes, tests, and publishing your own copy, see [Development and hosting](DEVELOPMENT.md).
+## Tests and verification
 
 
+
+```sh
 
