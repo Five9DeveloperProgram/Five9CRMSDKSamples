@@ -1,0 +1,1662 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Five9 Agent Desktop Toolkit &mdash; Embedded Adapter Testbed</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://cdn.prod.us.five9.net/stable/crm-sdk-lib/five9.crm.sdk.js"></script>
+
+    <style>
+        :root {
+            --panel-width: 420px;
+        }
+
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Adapter panel: docked (right rail) vs undocked (floating window) */
+        #adapterPanel {
+            width: var(--panel-width);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+        }
+
+        #adapterPanel.is-docked {
+            border-left: 1px solid #e5e7eb;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+        }
+
+        #adapterPanel.is-undocked {
+            position: fixed;
+            top: 80px;
+            left: 55%;
+            height: 640px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            box-shadow: 0 20px 45px -12px rgba(15, 23, 42, .35);
+            overflow: hidden;
+            resize: both;
+            z-index: 50;
+        }
+
+        #adapterPanel.is-undocked #panelHeader {
+            cursor: grab;
+        }
+
+        #adapterPanel.is-dragging #panelHeader {
+            cursor: grabbing;
+        }
+
+        #adapterFrame {
+            flex: 1 1 auto;
+            width: 100%;
+            border: 0;
+            background: #f9fafb;
+        }
+
+        #eventLog {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            max-height: 24rem;
+            overflow: auto;
+        }
+
+        /* Once the agent is signed in the log becomes the primary surface. */
+        body.focus-mode #eventLog {
+            max-height: calc(100vh - 17rem);
+        }
+
+        .section-toggle .chevron {
+            transition: transform .15s ease;
+            display: inline-block;
+        }
+
+        .section-toggle[aria-expanded="false"] .chevron {
+            transform: rotate(-90deg);
+        }
+
+        .log-row summary {
+            list-style: none;
+            cursor: pointer;
+        }
+
+        .log-row summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .log-payload {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .badge {
+            font-size: 10px;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+
+        button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        input, select {
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        code {
+            overflow-wrap: anywhere;
+        }
+
+        #hookDecisionDialog {
+            width: min(720px, calc(100vw - 32px));
+            max-height: calc(100dvh - 32px);
+            padding: 24px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: auto;
+        }
+
+        #hookDecisionDialog::backdrop {
+            background: rgba(0, 0, 0, .45);
+        }
+
+        #simulateDispositionHook, #simulateClickToDialHook {
+            width: 14rem;
+            max-width: 100%;
+            flex-shrink: 0;
+        }
+
+        #hookRequestPayload, #hookSampleResult {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            max-height: 16rem;
+            overflow: auto;
+        }
+
+        @media (max-width: 1023px) {
+            #workspaceLayout {
+                flex-direction: column;
+            }
+
+            #adapterPanel.is-docked {
+                position: relative;
+                width: 100%;
+                height: 70vh;
+                min-height: 420px;
+                border-left: 0;
+                border-top: 1px solid #e5e7eb;
+            }
+
+            #adapterPanel.is-undocked {
+                max-width: calc(100vw - 24px);
+                max-height: calc(100vh - 24px);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800">
+    <div id="workspaceLayout" class="flex min-h-screen">
+        <!-- ===== Mock CRM page ===== -->
+        <main class="flex-1 min-w-0">
+            <header class="bg-white border-b border-gray-200">
+                <div class="max-w-5xl mx-auto px-6 py-5 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h1 class="text-xl font-semibold text-gray-900">Agent Desktop Toolkit &mdash; Embedded Adapter Testbed</h1>
+                        <p class="text-sm text-gray-500 mt-1">
+                            A stand-in &ldquo;CRM&rdquo; page that hosts the Five9 adapter in an iframe, the same way Salesforce, Zendesk and Dynamics do.
+                        </p>
+                    </div>
+                    <a class="text-sm text-blue-600 hover:text-blue-800 whitespace-nowrap mt-1"
+                       href="https://cdn.prod.us.five9.net/stable/crm-sdk-lib/doc/tutorial-basicintegration.html" target="_blank" rel="noopener">
+                        CRM SDK docs &rarr;
+                    </a>
+                </div>
+            </header>
+
+            <div class="max-w-5xl mx-auto px-6 py-6 space-y-6">
+                <!-- Configuration -->
+                <section class="bg-white border border-gray-200 rounded-lg">
+                    <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+                        <button type="button" class="section-toggle flex items-start gap-2 text-left min-w-0"
+                                data-target="adapterForm" aria-expanded="true">
+                            <span class="chevron text-gray-400 mt-1">&#9662;</span>
+                            <span class="min-w-0">
+                                <span class="block font-semibold text-gray-900">1. Adapter configuration</span>
+                                <span id="configSummary" class="block text-sm text-gray-500 truncate">Set the URL params, then load the adapter into the panel.</span>
+                            </span>
+                        </button>
+                        <span id="sdkStatus" class="badge px-2 py-1 rounded bg-gray-100 text-gray-600 flex-shrink-0">SDK: checking</span>
+                    </div>
+
+                    <form id="adapterForm" class="px-5 py-4 space-y-4" autocomplete="off">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="min-w-0">
+                                <label for="adapterRegion" class="block text-sm font-medium text-gray-700 mb-1">Region</label>
+                                <select id="adapterRegion" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                    <option value="us">US</option>
+                                    <option value="ca">Canada</option>
+                                    <option value="uk">UK</option>
+                                    <option value="eu">EU</option>
+                                </select>
+                            </div>
+                            <div class="min-w-0">
+                                <label for="adapterType" class="block text-sm font-medium text-gray-700 mb-1">Adapter</label>
+                                <select id="adapterType" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                    <option value="adt" selected>Agent Desktop Toolkit</option>
+                                    <option value="dynamics">MS Dynamics</option>
+                                    <option value="oracle">Oracle</option>
+                                    <option value="salesforce">Salesforce</option>
+                                    <option value="fusion">Salesforce Fusion</option>
+                                    <option value="lightning">Salesforce Lightning</option>
+                                    <option value="servicenow">ServiceNow</option>
+                                    <option value="zendesk">Zendesk</option>
+                                    <option value="custom">Custom URL</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="adapterUrl" class="block text-sm font-medium text-gray-700 mb-1">Adapter URL</label>
+                            <input type="text" id="adapterUrl" name="adapterUrl"
+                                   value="https://app.five9.com/clients/integrations/adt.main.html"
+                                   class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <div>
+                            <label for="ssoLoginUrl" class="block text-sm font-medium text-gray-700 mb-1">
+                                IdP-initiated login URL <span class="text-gray-400 font-normal">(optional)</span>
+                            </label>
+                            <input type="text" id="ssoLoginUrl" name="ssoLoginUrl" placeholder="https://sso.mycompany.com/login"
+                                   class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Passed to the adapter as <code>idpLoginUrl</code>. Enables the SSO options below.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label class="flex items-start gap-2 border border-gray-200 rounded px-3 py-2 cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" id="crmApiToggle" class="mt-1" checked>
+                                <span class="text-sm">
+                                    <span class="font-medium text-gray-700">CRM API</span>
+                                    <span class="block text-xs text-gray-500"><code>f9crmapi=true</code></span>
+                                </span>
+                            </label>
+                            <label class="flex items-start gap-2 border border-gray-200 rounded px-3 py-2 cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" id="hookApiToggle" class="mt-1" checked>
+                                <span class="text-sm">
+                                    <span class="font-medium text-gray-700">Hook API</span>
+                                    <span class="block text-xs text-gray-500"><code>f9hookapi=true</code></span>
+                                </span>
+                            </label>
+                            <label class="flex items-start gap-2 border border-gray-200 rounded px-3 py-2 cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" id="verticalToggle" class="mt-1" checked>
+                                <span class="text-sm">
+                                    <span class="font-medium text-gray-700">Vertical layout</span>
+                                    <span class="block text-xs text-gray-500"><code>f9verticalthreshold=300px</code></span>
+                                </span>
+                            </label>
+                            <label id="autoSsoOption" class="hidden items-start gap-2 border border-gray-200 rounded px-3 py-2 cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" id="autoSsoToggle" class="mt-1">
+                                <span class="text-sm">
+                                    <span class="font-medium text-gray-700">Auto SSO login</span>
+                                    <span class="block text-xs text-gray-500"><code>autoSsoLogin=true</code></span>
+                                </span>
+                            </label>
+                            <label id="fis2Option" class="hidden items-start gap-2 border border-gray-200 rounded px-3 py-2 cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" id="fis2Toggle" class="mt-1">
+                                <span class="text-sm">
+                                    <span class="font-medium text-gray-700">FIS2</span>
+                                    <span class="block text-xs text-gray-500">Wrap login URL with <code>RelayState</code></span>
+                                </span>
+                            </label>
+                        </div>
+
+                        <div id="hookApiOptions" class="border border-blue-200 bg-blue-50 rounded px-3 py-3">
+                            <p class="text-xs text-blue-900">
+                                Hooks fire <em>before</em> the adapter performs an action and can change, confirm or cancel it. This page registers
+                                hooks as pass-throughs returning <code>Proceed</code> unless an inspection sample below is enabled.
+                                Requests and responses appear under the <strong>hook</strong> badge. Only one Hook API implementation can exist per adapter.
+                            </p>
+                        </div>
+
+                        <div id="fis2Options" class="hidden border border-yellow-200 bg-yellow-50 rounded px-3 py-3">
+                            <p class="text-xs text-yellow-900">
+                                The adapter URL plus <code>f9idplogin=true</code> is URL-encoded and appended to the IdP login URL as
+                                <code>RelayState</code>, so the IdP returns the agent straight back to the adapter.
+                            </p>
+                            <p class="text-xs font-medium text-yellow-900 mt-2">Resulting IdP login URL</p>
+                            <p id="fis2Preview" class="text-xs text-yellow-800 break-all mt-1">&mdash;</p>
+                        </div>
+
+                        <label class="text-sm text-gray-700 flex items-center gap-2">
+                            <input type="checkbox" id="customComponentsToggle">
+                            Custom adapter component
+                        </label>
+
+                        <fieldset class="border border-gray-200 rounded px-3 py-3">
+                            <legend class="text-xs font-medium text-gray-500 uppercase tracking-wide px-1">CRM provider (getAdtConfig)</legend>
+                            <div class="flex flex-wrap items-center gap-4">
+                                <label class="text-sm text-gray-700">
+                                    Provider name
+                                    <input type="text" id="providerName" value="Embedded Adapter Testbed"
+                                           class="ml-2 border border-gray-300 rounded px-2 py-1 text-sm w-56">
+                                </label>
+                                <label class="text-sm text-gray-700 flex items-center gap-1"><input type="checkbox" id="myCallsEnabled" checked> My Calls Today</label>
+                                <label class="text-sm text-gray-700 flex items-center gap-1"><input type="checkbox" id="myChatsEnabled" checked> My Chats Today</label>
+                                <label class="text-sm text-gray-700 flex items-center gap-1"><input type="checkbox" id="myEmailsEnabled" checked> My Emails Today</label>
+                                <label class="text-sm text-gray-700 flex items-center gap-1"><input type="checkbox" id="showContactInfo"> Show contact info</label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">Read when the adapter calls <code>getAdtConfig</code>, so change these before loading.</p>
+                        </fieldset>
+
+                        <div class="pt-1 flex flex-wrap items-center gap-3">
+                            <button type="submit" id="loadAdapterButton"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded">
+                                Load adapter
+                            </button>
+                            <button type="button" id="unloadAdapterButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                Unload
+                            </button>
+                        </div>
+
+                        <div>
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Resolved iframe src</p>
+                                    <button type="button" id="copyIframeButton" disabled
+                                            class="border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 text-xs font-medium py-1 px-3 rounded">
+                                        Copy full iframe
+                                    </button>
+                                </div>
+                            <p id="resolvedUrl" class="text-xs text-gray-700 break-all mt-1 font-mono">&mdash;</p>
+                        </div>
+                    </form>
+                </section>
+
+                <section id="hookSamplesSection" class="bg-white border border-gray-200 rounded-lg">
+                    <div class="px-5 py-4 border-b border-gray-200">
+                        <h2 class="font-semibold text-gray-900">Hook samples</h2>
+                    </div>
+                    <div class="px-5 py-4 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
+                                <input type="checkbox" id="beforeDispositionSample">
+                                Before Disposition Sample
+                            </label>
+                            <button type="button" id="simulateDispositionHook" disabled
+                                    class="border border-gray-300 hover:bg-gray-50 text-sm py-2 px-3 rounded">Simulate disposition hook</button>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-700">
+                                <input type="checkbox" id="beforeClickToDialSample">
+                                Before Click-to-Dial Sample
+                            </label>
+                            <button type="button" id="simulateClickToDialHook" disabled
+                                    class="border border-gray-300 hover:bg-gray-50 text-sm py-2 px-3 rounded">Simulate click-to-dial hook</button>
+                        </div>
+                        <div>
+                            <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Latest sample decision</h3>
+                            <pre id="hookSampleResult" class="text-xs text-gray-700" aria-live="polite">No decisions yet.</pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CRM actions -->
+                <section class="bg-white border border-gray-200 rounded-lg">
+                    <div class="px-5 py-4 border-b border-gray-200">
+                        <button type="button" class="section-toggle flex items-start gap-2 text-left w-full"
+                                data-target="actionsBody" aria-expanded="true">
+                            <span class="chevron text-gray-400 mt-1">&#9662;</span>
+                            <span>
+                                <span class="block font-semibold text-gray-900">2. Send events to the adapter</span>
+                                <span class="block text-sm text-gray-500">
+                                    These call <code>interactionApi</code> methods, mimicking activity on a CRM record page.
+                                </span>
+                            </span>
+                        </button>
+                    </div>
+                    <div id="actionsBody" class="px-5 py-4 space-y-3">
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label for="dialNumber" class="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
+                                <input type="tel" id="dialNumber" value="9250000111"
+                                       class="border border-gray-300 rounded px-3 py-2 text-sm w-44">
+                            </div>
+                            <div>
+                                <label for="campaignName" class="block text-sm font-medium text-gray-700 mb-1">
+                                    Campaign <span class="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input type="text" id="campaignName" placeholder="Outbound campaign name"
+                                       class="border border-gray-300 rounded px-3 py-2 text-sm w-56">
+                            </div>
+                            <label class="text-sm text-gray-700 flex items-center gap-2 pb-2">
+                                <input type="checkbox" id="useCurrentCampaign" checked>
+                                Use agent&rsquo;s selected campaign
+                            </label>
+                            <button type="button" id="clickToDialButton"
+                                    class="bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2 px-4 rounded">
+                                click2dial
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button type="button" id="objectVisitedButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                objectVisited (Case)
+                            </button>
+                            <button type="button" id="presenceButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                getPresence
+                            </button>
+                            <button type="button" id="metadataButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                getMetadata
+                            </button>
+                            <button type="button" id="suggestedNumbersButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                suggestedNumbers
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                            <code>click2dial</code> hands a number to the adapter; it does not place the call by itself. The adapter dials only when it
+                            can resolve a campaign &mdash; a default campaign configured by an admin, the campaign named above
+                            (<code>preselectedCampaignName</code>), or the one the agent has selected (<code>useCurrentlySelectedCampaign</code>).
+                            Otherwise the number is just staged in the dialpad.
+                        </p>
+
+                        <div class="pt-4 border-t border-gray-200 space-y-3">
+                            <label for="activeCall" class="block text-sm font-medium text-gray-700">Active call</label>
+                            <select id="activeCall" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                <option value="">Select a call</option>
+                            </select>
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                <div class="space-y-2 min-w-0">
+                                    <button type="button" id="getCavButton" class="border border-gray-300 hover:bg-gray-50 text-sm py-2 px-3 rounded">Get call variables</button>
+                                    <label for="cavId" class="block text-sm font-medium text-gray-700">Call variable</label>
+                                    <select id="cavId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                        <option value="">Select a variable</option>
+                                    </select>
+                                    <label for="cavValue" class="block text-sm font-medium text-gray-700">Value</label>
+                                    <input type="text" id="cavValue" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                    <button type="button" id="setCavButton" class="border border-gray-300 hover:bg-gray-50 text-sm py-2 px-3 rounded">Set call variable</button>
+                                </div>
+                                <div class="space-y-2 min-w-0">
+                                    <button type="button" id="getDispositionsButton" class="border border-gray-300 hover:bg-gray-50 text-sm py-2 px-3 rounded">Get dispositions</button>
+                                    <label for="dispositionId" class="block text-sm font-medium text-gray-700">Disposition</label>
+                                    <select id="dispositionId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                        <option value="">Select a disposition</option>
+                                    </select>
+                                    <label for="dispositionTimeout" class="block text-sm font-medium text-gray-700">Timer value (optional)</label>
+                                    <input type="text" id="dispositionTimeout" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                                    <button type="button" id="setDispositionButton" class="border border-red-300 hover:bg-red-50 text-red-700 text-sm py-2 px-3 rounded">Set disposition</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Synthetic CRM state -->
+                <section id="crmStateSection" class="bg-white border border-gray-200 rounded-lg">
+                    <div class="px-5 py-4 border-b border-gray-200">
+                        <button type="button" class="section-toggle flex items-start gap-2 text-left w-full"
+                                data-target="crmStateBody" aria-expanded="true">
+                            <span class="chevron text-gray-400 mt-1">&#9662;</span>
+                            <span>
+                                <span class="block font-semibold text-gray-900">3. Synthetic CRM state</span>
+                                <span class="block text-sm text-gray-500">
+                                    What this page returns when the adapter calls <code>getTodayCallsCount</code>, <code>search</code> and friends.
+                                </span>
+                            </span>
+                        </button>
+                    </div>
+                    <div id="crmStateBody" class="px-5 py-4 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="border border-gray-200 rounded px-3 py-3">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">My Calls Today</p>
+                                <p id="callsCount" class="text-2xl font-semibold text-gray-900">0</p>
+                                <button type="button" data-counter="calls"
+                                        class="counter-add mt-1 text-xs border border-gray-300 hover:bg-gray-50 rounded px-2 py-1">+1</button>
+                            </div>
+                            <div class="border border-gray-200 rounded px-3 py-3">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">My Chats Today</p>
+                                <p id="chatsCount" class="text-2xl font-semibold text-gray-900">0</p>
+                                <button type="button" data-counter="chats"
+                                        class="counter-add mt-1 text-xs border border-gray-300 hover:bg-gray-50 rounded px-2 py-1">+1</button>
+                            </div>
+                            <div class="border border-gray-200 rounded px-3 py-3">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">My Emails Today</p>
+                                <p id="emailsCount" class="text-2xl font-semibold text-gray-900">0</p>
+                                <button type="button" data-counter="emails"
+                                        class="counter-add mt-1 text-xs border border-gray-300 hover:bg-gray-50 rounded px-2 py-1">+1</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500">
+                            Counters bump automatically on every <code>saveLog</code>. The adapter caches the values it already fetched, so the badge in the
+                            adapter updates the next time it asks &mdash; usually after the next interaction is logged.
+                        </p>
+
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label for="searchBehavior" class="block text-sm font-medium text-gray-700 mb-1">
+                                    <code>search</code> returns
+                                </label>
+                                <select id="searchBehavior" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                                    <option value="single">One contact (auto screen pop)</option>
+                                    <option value="multiple">Two contacts (agent picks)</option>
+                                    <option value="none">No results</option>
+                                    <option value="reject">Rejected promise (error path)</option>
+                                </select>
+                            </div>
+                            <button type="button" id="addActivityButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                Add synthetic call log
+                            </button>
+                            <button type="button" id="resetCrmStateButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium py-2 px-4 rounded">
+                                Reset
+                            </button>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">My activity today</p>
+                            <div id="activityList" class="border border-gray-200 rounded divide-y divide-gray-100 max-h-56 overflow-auto">
+                                <p id="activityEmpty" class="px-3 py-6 text-center text-sm text-gray-400">
+                                    Nothing logged yet. Finish an interaction, or add a synthetic call log.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Event log -->
+                <section id="logSection" class="bg-white border border-gray-200 rounded-lg">
+                    <div class="px-5 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 class="font-semibold text-gray-900">4. Adapter event log</h2>
+                            <p class="text-sm text-gray-500">Live output from the Application, Interaction, Presence, CRM and Hook APIs.</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <label class="text-xs text-gray-600 flex items-center gap-1">
+                                <input type="checkbox" id="autoScroll" checked> Follow
+                            </label>
+                            <button type="button" id="clearLogButton"
+                                    class="border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-medium py-1 px-3 rounded">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="px-5 py-3 border-b border-gray-200 flex flex-wrap gap-4" id="logFilters">
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="application" checked> Application</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="interaction" checked> Interaction</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="presence" checked> Presence</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="crm" checked> CRM callbacks</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="hook" checked> Hooks</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="host" checked> Host page</label>
+                        <label class="text-xs text-gray-600 flex items-center gap-1"><input type="checkbox" data-filter="error" checked> Errors</label>
+                    </div>
+                    <div id="eventLog" class="divide-y divide-gray-100">
+                        <p id="eventLogEmpty" class="px-5 py-8 text-center text-sm text-gray-400" style="font-family: inherit;">
+                            No events yet. Load the adapter and sign in to start seeing traffic.
+                        </p>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ===== Adapter panel ===== -->
+        <aside id="adapterPanel" class="is-docked">
+            <div id="panelHeader" class="flex items-center justify-between px-4 py-3 bg-gray-900 text-white select-none">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span id="loginStateDot" class="w-2 h-2 rounded-full bg-gray-500 flex-shrink-0"></span>
+                    <span class="text-sm font-medium truncate">Five9 Adapter</span>
+                    <span id="loginState" class="badge px-2 py-1 rounded bg-gray-700 text-gray-200">idle</span>
+                </div>
+                <button type="button" id="dockButton"
+                        class="text-xs border border-gray-600 hover:bg-gray-800 rounded px-2 py-1">
+                    Undock
+                </button>
+            </div>
+            <!-- Each feature is delegated with "*" so the adapter can pass it on to its own nested frames. -->
+            <iframe id="adapterFrame" title="Five9 Agent Desktop Toolkit"
+                    allow="microphone *; camera *; autoplay *; speaker-selection *; display-capture *; clipboard-read *; clipboard-write *; fullscreen *; storage-access *; local-network-access *"
+                    allowfullscreen
+                    referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            <div class="px-4 py-2 border-t border-gray-200 text-xs text-gray-500 bg-gray-50">
+                Drag the header when undocked &middot; resize from the bottom-right corner
+            </div>
+        </aside>
+    </div>
+
+    <dialog id="hookDecisionDialog" aria-labelledby="hookDecisionTitle">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 id="hookDecisionTitle" class="text-lg font-semibold text-gray-900">Inspect hook request</h2>
+            <span id="hookRequestSource" class="badge px-2 py-1 rounded bg-blue-100 text-blue-800"></span>
+        </div>
+        <pre id="hookRequestPayload" class="text-xs text-gray-700 bg-gray-50 p-3 mb-4" tabindex="0"></pre>
+        <label for="hookRejectReason" class="block text-sm font-medium text-gray-700 mb-1">Rejection reason</label>
+        <input id="hookRejectReason" type="text" class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-4">
+        <div class="flex flex-wrap justify-end gap-3">
+            <button type="button" id="rejectHookButton" class="border border-red-300 hover:bg-red-50 text-red-700 text-sm py-2 px-4 rounded">Reject</button>
+            <button type="button" id="proceedHookButton" class="bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-4 rounded">Proceed</button>
+        </div>
+    </dialog>
+
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('adapterForm');
+            const frame = document.getElementById('adapterFrame');
+            const panel = document.getElementById('adapterPanel');
+            const panelHeader = document.getElementById('panelHeader');
+            const dockButton = document.getElementById('dockButton');
+            const fis2Toggle = document.getElementById('fis2Toggle');
+            const fis2Options = document.getElementById('fis2Options');
+            const fis2Preview = document.getElementById('fis2Preview');
+            const resolvedUrl = document.getElementById('resolvedUrl');
+            const copyIframeButton = document.getElementById('copyIframeButton');
+            const logEl = document.getElementById('eventLog');
+            const logEmpty = document.getElementById('eventLogEmpty');
+            const autoScroll = document.getElementById('autoScroll');
+            const loginStateEl = document.getElementById('loginState');
+            const loginStateDot = document.getElementById('loginStateDot');
+            const hookDecisionDialog = document.getElementById('hookDecisionDialog');
+
+            const categoryStyles = {
+                application: 'bg-indigo-100 text-indigo-700',
+                interaction: 'bg-green-100 text-green-700',
+                presence: 'bg-yellow-100 text-yellow-700',
+                crm: 'bg-blue-100 text-blue-700',
+                hook: 'bg-purple-100 text-purple-700',
+                host: 'bg-gray-200 text-gray-700',
+                error: 'bg-red-100 text-red-700'
+            };
+            const activeFilters = new Set(Object.keys(categoryStyles));
+
+            /* ---------- Collapsible sections ---------- */
+
+            function setCollapsed(targetId, collapsed) {
+                const body = document.getElementById(targetId);
+                const toggle = document.querySelector(`.section-toggle[data-target="${targetId}"]`);
+                if (!body || !toggle) {
+                    return;
+                }
+                body.classList.toggle('hidden', collapsed);
+                toggle.setAttribute('aria-expanded', String(!collapsed));
+            }
+
+            document.querySelectorAll('.section-toggle').forEach(function (toggle) {
+                toggle.addEventListener('click', function () {
+                    setCollapsed(toggle.dataset.target, toggle.getAttribute('aria-expanded') === 'true');
+                });
+            });
+
+            /* ---------- URL building ---------- */
+
+            const adapterRegion = document.getElementById('adapterRegion');
+            const adapterType = document.getElementById('adapterType');
+            const adapterRegions = {
+                us: {
+                    origin: 'https://app.five9.com',
+                    fusion: 'https://auth.five9.com/home/oidc_client/0oaor2bimkrlTwr7V5d7/aln177a159h7Zf52X0g8'
+                },
+                ca: {
+                    origin: 'https://app.ca.five9.com',
+                    fusion: 'https://auth.ca.five9.com/home/oidc_client/0oa10ra5tcnhQDCIR698/aln177a159h7Zf52X0g8'
+                },
+                uk: {
+                    origin: 'https://app.five9.eu',
+                    fusion: 'https://auth.five9.eu/home/oidc_client/0oaund9edxFfr0iZ8417/aln177a159h7Zf52X0g8'
+                },
+                eu: {
+                    origin: 'https://app.eu.five9.com',
+                    fusion: 'https://auth.eu.five9.com/home/oidc_client/0oaund7841H9SkbSv417/aln177a159h7Zf52X0g8'
+                }
+            };
+            const adapterPaths = {
+                adt: '/clients/integrations/adt.main.html',
+                zendesk: '/clients/integrations/zd.main.html',
+                oracle: '/clients/integrations/rn.main.html',
+                dynamics: '/clients/integrations/msdyn.main.html',
+                salesforce: '/clients/integrations/sf.main.html',
+                lightning: '/clients/integrations/sfli.main.html',
+                servicenow: '/clients/integrations/sn.main.html'
+            };
+
+            function applyAdapterPreset() {
+                adapterRegion.disabled = adapterType.value === 'custom';
+                if (adapterRegion.disabled) {
+                    return;
+                }
+                const region = adapterRegions[adapterRegion.value];
+                form['adapterUrl'].value = adapterType.value === 'fusion'
+                    ? region.fusion
+                    : new URL(adapterPaths[adapterType.value], region.origin).href;
+                refreshPreview();
+            }
+
+            function isFusionUrl(url) {
+                return Object.values(adapterRegions).some(region => {
+                    const fusion = new URL(region.fusion);
+                    return url.origin === fusion.origin && url.pathname === fusion.pathname;
+                });
+            }
+
+            adapterRegion.addEventListener('change', applyAdapterPreset);
+            adapterType.addEventListener('change', applyAdapterPreset);
+            form['adapterUrl'].addEventListener('input', function () {
+                adapterType.value = 'custom';
+                adapterRegion.disabled = true;
+            });
+
+            function parseHttpUrl(value) {
+                const url = new URL(value);
+                if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
+                    throw new Error('Use an absolute HTTP or HTTPS URL without embedded credentials.');
+                }
+                return url;
+            }
+
+            function buildSsoLoginUrl(adapterUrl) {
+                const ssoLoginUrl = form['ssoLoginUrl'].value.trim();
+                if (!ssoLoginUrl) {
+                    return '';
+                }
+                const url = parseHttpUrl(ssoLoginUrl);
+                if (fis2Toggle.checked) {
+                    const relayState = parseHttpUrl(adapterUrl);
+                    if (!isFusionUrl(relayState)) {
+                        relayState.searchParams.set('f9idplogin', 'true');
+                    }
+                    url.searchParams.set('RelayState', relayState.href);
+                }
+                return url.href;
+            }
+
+            function buildAdapterUrl() {
+                const url = parseHttpUrl(form['adapterUrl'].value.trim());
+                if (isFusionUrl(url)) {
+                    return url.href;
+                }
+                const options = [
+                    ['f9crmapi', 'crmApiToggle', 'true'],
+                    ['f9hookapi', 'hookApiToggle', 'true'],
+                    ['f9verticalthreshold', 'verticalToggle', '300px']
+                ];
+                options.forEach(([name, toggle, value]) => {
+                    url.searchParams.delete(name);
+                    if (document.getElementById(toggle).checked) {
+                        url.searchParams.set(name, value);
+                    }
+                });
+                url.searchParams.delete('idpLoginUrl');
+                url.searchParams.delete('autoSsoLogin');
+                const ssoLoginUrl = buildSsoLoginUrl(url.href);
+                if (ssoLoginUrl) {
+                    url.searchParams.set('idpLoginUrl', ssoLoginUrl);
+                    if (document.getElementById('autoSsoToggle').checked) {
+                        url.searchParams.set('autoSsoLogin', 'true');
+                    }
+                }
+                return url.href;
+            }
+
+            function refreshPreview() {
+                try {
+                    const url = new URL(buildAdapterUrl());
+                    fis2Preview.textContent = url.searchParams.get('idpLoginUrl') || buildSsoLoginUrl(url.href) || '-';
+                } catch (error) {
+                    fis2Preview.textContent = error.message;
+                }
+            }
+
+            function buildIframeMarkup() {
+                const copy = document.createElement('iframe');
+                ['src', 'title', 'allow', 'allowfullscreen', 'referrerpolicy'].forEach(function (name) {
+                    if (frame.hasAttribute(name)) {
+                        copy.setAttribute(name, frame.getAttribute(name));
+                    }
+                });
+                return copy.outerHTML;
+            }
+
+            function copyText(text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    return navigator.clipboard.writeText(text);
+                }
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                const copied = document.execCommand('copy');
+                textarea.remove();
+                return copied ? Promise.resolve() : Promise.reject(new Error('Clipboard access was denied.'));
+            }
+
+            // The SSO-only options are meaningless without an IdP login URL.
+            function refreshSsoOptions() {
+                const hasSsoUrl = form['ssoLoginUrl'].value.trim() !== '';
+                const autoSsoToggle = document.getElementById('autoSsoToggle');
+
+                document.getElementById('autoSsoOption').classList.toggle('hidden', !hasSsoUrl);
+                document.getElementById('autoSsoOption').classList.toggle('flex', hasSsoUrl);
+                document.getElementById('fis2Option').classList.toggle('hidden', !hasSsoUrl);
+                document.getElementById('fis2Option').classList.toggle('flex', hasSsoUrl);
+
+                if (!hasSsoUrl) {
+                    autoSsoToggle.checked = false;
+                    fis2Toggle.checked = false;
+                    fis2Options.classList.add('hidden');
+                }
+            }
+
+            /* ---------- Event log ---------- */
+
+            function safeStringify(value) {
+                try {
+                    return JSON.stringify(value, null, 2);
+                } catch (e) {
+                    return String(value);
+                }
+            }
+
+            function log(category, name, payload) {
+                logEmpty.classList.add('hidden');
+
+                const row = document.createElement('details');
+                row.className = 'log-row';
+                row.dataset.category = category;
+                row.hidden = !activeFilters.has(category);
+
+                const summary = document.createElement('summary');
+                summary.className = 'px-5 py-2 flex items-center gap-3 hover:bg-gray-50';
+
+                const time = document.createElement('span');
+                time.className = 'text-gray-400 flex-shrink-0';
+                time.textContent = new Date().toLocaleTimeString([], { hour12: false });
+
+                const badge = document.createElement('span');
+                badge.className = `badge px-2 py-1 rounded flex-shrink-0 ${categoryStyles[category] || categoryStyles.host}`;
+                badge.textContent = category;
+
+                const label = document.createElement('span');
+                label.className = 'text-gray-800 font-medium truncate';
+                label.textContent = name;
+
+                summary.append(time, badge, label);
+                row.appendChild(summary);
+
+                const body = document.createElement('pre');
+                body.className = 'log-payload px-5 pb-3 pt-1 text-gray-600 bg-gray-50';
+                body.textContent = payload === undefined ? '(no payload)' : safeStringify(payload);
+                row.appendChild(body);
+
+                logEl.appendChild(row);
+
+                const rows = logEl.querySelectorAll('.log-row');
+                if (rows.length > 400) {
+                    rows[0].remove();
+                }
+                if (autoScroll.checked) {
+                    logEl.scrollTop = logEl.scrollHeight;
+                }
+            }
+
+            document.getElementById('logFilters').addEventListener('change', function (e) {
+                const category = e.target.dataset.filter;
+                if (!category) {
+                    return;
+                }
+                if (e.target.checked) {
+                    activeFilters.add(category);
+                } else {
+                    activeFilters.delete(category);
+                }
+                logEl.querySelectorAll('.log-row').forEach(row => {
+                    row.hidden = !activeFilters.has(row.dataset.category);
+                });
+            });
+
+            document.getElementById('clearLogButton').addEventListener('click', function () {
+                logEl.querySelectorAll('.log-row').forEach(row => row.remove());
+                logEmpty.classList.remove('hidden');
+            });
+
+            /* ---------- Synthetic CRM state ---------- */
+
+            const crmState = { calls: 0, chats: 0, emails: 0 };
+            const activityList = document.getElementById('activityList');
+            const activityEmpty = document.getElementById('activityEmpty');
+
+            const demoContacts = [
+                {
+                    id: '123',
+                    type: 'Contact',
+                    label: 'Contact',
+                    name: 'Jamie Rivera',
+                    isWho: true,
+                    isWhat: false,
+                    fields: [{ displayName: 'Company', value: 'Acme Industries' }]
+                },
+                {
+                    id: '789',
+                    type: 'Account',
+                    label: 'Account',
+                    name: 'Acme Industries',
+                    isWho: false,
+                    isWhat: true,
+                    fields: [{ displayName: 'Owner', value: 'Dana Chen' }]
+                }
+            ];
+
+            function renderCounters() {
+                document.getElementById('callsCount').textContent = crmState.calls;
+                document.getElementById('chatsCount').textContent = crmState.chats;
+                document.getElementById('emailsCount').textContent = crmState.emails;
+            }
+
+            function addActivity(entry) {
+                activityEmpty.classList.add('hidden');
+
+                const row = document.createElement('div');
+                row.className = 'px-3 py-2 flex items-baseline gap-3 text-sm';
+
+                const time = document.createElement('span');
+                time.className = 'text-xs text-gray-400 flex-shrink-0';
+                time.textContent = new Date().toLocaleTimeString([], { hour12: false });
+
+                const type = document.createElement('span');
+                type.className = 'badge px-2 py-1 rounded bg-gray-200 text-gray-700 flex-shrink-0';
+                type.textContent = entry.type;
+
+                const label = document.createElement('span');
+                label.className = 'text-gray-800 truncate';
+                label.textContent = entry.subject;
+
+                row.append(time, type, label);
+                activityList.appendChild(row);
+                activityList.scrollTop = activityList.scrollHeight;
+            }
+
+            function countInteraction(interactionType) {
+                const key = { Chat: 'chats', Email: 'emails' }[interactionType] || 'calls';
+                crmState[key] += 1;
+                renderCounters();
+            }
+
+            function revealCrmState() {
+                setCollapsed('crmStateBody', false);
+                document.getElementById('crmStateSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            document.querySelectorAll('.counter-add').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    crmState[button.dataset.counter] += 1;
+                    renderCounters();
+                    log('host', `counter ${button.dataset.counter} incremented`, crmState);
+                });
+            });
+
+            document.getElementById('addActivityButton').addEventListener('click', function () {
+                countInteraction('Call');
+                addActivity({ type: 'Call', subject: 'Synthetic call \u2014 Jamie Rivera' });
+                log('host', 'synthetic call log added', crmState);
+            });
+
+            document.getElementById('resetCrmStateButton').addEventListener('click', function () {
+                crmState.calls = 0;
+                crmState.chats = 0;
+                crmState.emails = 0;
+                renderCounters();
+                activityList.querySelectorAll('div').forEach(row => row.remove());
+                activityEmpty.classList.remove('hidden');
+                log('host', 'synthetic CRM state reset');
+            });
+
+            /* ---------- Login state pill ---------- */
+
+            let focusModeApplied = false;
+
+            function enterFocusMode() {
+                if (focusModeApplied) {
+                    return;
+                }
+                focusModeApplied = true;
+                document.body.classList.add('focus-mode');
+                setCollapsed('adapterForm', true);
+                document.getElementById('configSummary').textContent = resolvedUrl.textContent;
+                document.getElementById('logSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            function exitFocusMode() {
+                focusModeApplied = false;
+                document.body.classList.remove('focus-mode');
+                setCollapsed('adapterForm', false);
+                document.getElementById('configSummary').textContent = 'Set the URL params, then load the adapter into the panel.';
+            }
+
+            function setLoginState(state) {
+                adapterReady = adapterLoaded && state === 'WORKING';
+                updateActions();
+                loginStateEl.textContent = state;
+                const colors = {
+                    WORKING: 'bg-green-500',
+                    LOGGED_OUT: 'bg-gray-500',
+                    ERROR: 'bg-red-500'
+                };
+                loginStateDot.className = `w-2 h-2 rounded-full flex-shrink-0 ${colors[state] || 'bg-yellow-400'}`;
+                if (state === 'WORKING') {
+                    enterFocusMode();
+                } else {
+                    exitFocusMode();
+                }
+            }
+
+            /* ---------- CRM SDK wiring ---------- */
+
+            const sdk = window.Five9 && window.Five9.CrmSdk;
+            const sdkStatus = document.getElementById('sdkStatus');
+            let applicationApi = null;
+            let interactionApi = null;
+            let presenceApi = null;
+            let crmApi = null;
+            let hookApi = null;
+            let hooksRegistered = false;
+            let pendingHook = null;
+            let adapterLoaded = false;
+            let adapterReady = false;
+            let clickToDialEnabled = null;
+            const activeCalls = new Map();
+            const activeCall = document.getElementById('activeCall');
+            const cavSelect = document.getElementById('cavId');
+            const dispositionSelect = document.getElementById('dispositionId');
+            let callRevision = 0;
+            let writePending = false;
+            let callVariables = [];
+            let customComponentsRegistered = false;
+
+            function updateActions() {
+                ['clickToDialButton', 'objectVisitedButton', 'presenceButton', 'metadataButton', 'suggestedNumbersButton'].forEach(function (id) {
+                    const button = document.getElementById(id);
+                    button.disabled = !adapterReady || (id === 'clickToDialButton' && clickToDialEnabled === false);
+                    button.title = button.disabled ? 'Waiting for the adapter to enable this action' : '';
+                });
+                const hasCall = adapterReady && activeCalls.has(activeCall.value);
+                activeCall.disabled = !adapterReady;
+                ['getCavButton', 'getDispositionsButton'].forEach(id => {
+                    document.getElementById(id).disabled = !hasCall;
+                });
+                document.getElementById('setCavButton').disabled = !hasCall || !cavSelect.value || writePending;
+                document.getElementById('setDispositionButton').disabled = !hasCall || !dispositionSelect.value || writePending;
+            }
+
+            function clearCallDetails() {
+                callRevision += 1;
+                callVariables = [];
+                cavSelect.replaceChildren(new Option('Select a variable', ''));
+                dispositionSelect.replaceChildren(new Option('Select a disposition', ''));
+                document.getElementById('cavValue').value = '';
+                document.getElementById('dispositionTimeout').value = '';
+                updateActions();
+            }
+
+            function trackCall(name, params) {
+                const call = params && params.callData;
+                if (!adapterLoaded || !call || !call.interactionId) {
+                    return;
+                }
+                const id = String(call.interactionId);
+                if (name === 'callFinished' || name === 'callRejected') {
+                    activeCalls.delete(id);
+                } else if (['callStarted', 'callAccepted', 'callEnded'].includes(name)) {
+                    activeCalls.set(id, call);
+                } else {
+                    return;
+                }
+                const selected = activeCall.value;
+                activeCall.replaceChildren(new Option('Select a call', ''));
+                activeCalls.forEach((value, key) => {
+                    activeCall.add(new Option(`${value.number || 'Call'} (${key})`, key));
+                });
+                activeCall.value = activeCalls.has(selected) ? selected : '';
+                if (selected !== activeCall.value) {
+                    clearCallDetails();
+                }
+                updateActions();
+            }
+
+            function resetAdapterState() {
+                finishHookDecision('Error', 'Adapter session changed while awaiting a hook decision.');
+                adapterReady = false;
+                clickToDialEnabled = null;
+                activeCalls.clear();
+                activeCall.replaceChildren(new Option('Select a call', ''));
+                clearCallDetails();
+                updateActions();
+            }
+
+            updateActions();
+
+            if (!sdk) {
+                sdkStatus.textContent = 'SDK: not loaded';
+                sdkStatus.className = 'badge px-2 py-1 rounded bg-red-100 text-red-700';
+                log('error', 'five9.crm.sdk.js failed to load', 'Check network access to cdn.prod.us.five9.net');
+            } else {
+                sdkStatus.textContent = 'SDK: loaded';
+                sdkStatus.className = 'badge px-2 py-1 rounded bg-green-100 text-green-700';
+
+                applicationApi = sdk.applicationApi();
+                interactionApi = sdk.interactionApi();
+                presenceApi = sdk.presenceApi();
+                crmApi = sdk.crmApi();
+                hookApi = sdk.hookApi();
+
+                applicationApi.subscribe({
+                    sessionInitialized: () => {
+                        if (adapterLoaded) {
+                            log('application', 'sessionInitialized');
+                        }
+                    },
+                    loginStateChanged: params => {
+                        if (!adapterLoaded) {
+                            return;
+                        }
+                        if (!params || params.state !== 'WORKING') {
+                            resetAdapterState();
+                        }
+                        setLoginState((params && params.state) || 'unknown');
+                        log('application', 'loginStateChanged', params);
+                    },
+                    uiNotification: notification => log('application', 'uiNotification', notification),
+                    error: event => log('error', 'application error', event)
+                });
+
+                const interactionEvents = [
+                    'callStarted', 'callAccepted', 'callRejected', 'callEnded', 'callFinished',
+                    'chatOffered', 'chatAccepted', 'chatRejected', 'chatTransferred', 'chatEnded', 'chatFinished',
+                    'emailOffered', 'emailAccepted', 'emailRejected', 'emailTransferred', 'emailFinished',
+                    'interactionOpened', 'objectSelected'
+                ];
+                interactionApi.subscribe(interactionEvents.reduce((handlers, name) => {
+                    handlers[name] = params => {
+                        trackCall(name, params);
+                        log('interaction', name, params);
+                    };
+                    return handlers;
+                }, {}));
+
+                presenceApi.subscribe({
+                    presenceChanged: params => log('presence', 'presenceChanged', params),
+                    channelsChanged: params => log('presence', 'channelsChanged', params),
+                    notReadyCodesChanged: params => log('presence', 'notReadyCodesChanged', params)
+                });
+
+                // Minimal CRM implementation so the adapter has something to search and screen pop against.
+                crmApi.registerApi({
+                    getAdtConfig: () => {
+                        const config = {
+                            providerName: document.getElementById('providerName').value.trim() || 'Embedded Adapter Testbed',
+                            myCallsTodayEnabled: document.getElementById('myCallsEnabled').checked,
+                            myChatsTodayEnabled: document.getElementById('myChatsEnabled').checked,
+                            myEmailsTodayEnabled: document.getElementById('myEmailsEnabled').checked,
+                            showContactInfo: document.getElementById('showContactInfo').checked
+                        };
+                        log('crm', 'getAdtConfig', config);
+                        return Promise.resolve(config);
+                    },
+                    search: params => {
+                        log('crm', 'search', params);
+                        const behavior = document.getElementById('searchBehavior').value;
+                        if (behavior === 'reject') {
+                            return Promise.reject({ error: 'Synthetic CRM search failure' });
+                        }
+                        if (behavior === 'none') {
+                            return Promise.resolve({ crmObjects: [], screenPopObject: null });
+                        }
+                        if (behavior === 'multiple') {
+                            return Promise.resolve({ crmObjects: demoContacts, screenPopObject: null });
+                        }
+                        return Promise.resolve({ crmObjects: [demoContacts[0]], screenPopObject: demoContacts[0] });
+                    },
+                    screenPop: params => log('crm', 'screenPop', params),
+                    saveLog: params => {
+                        log('crm', 'saveLog', params);
+                        const interactionType = (params && params.interactionType) || 'Call';
+                        const logData = (params && params.interactionLogData) || {};
+                        countInteraction(interactionType);
+                        addActivity({
+                            type: interactionType,
+                            subject: logData.subject || logData.dispositionName || 'Interaction logged'
+                        });
+                    },
+                    getTodayCallsCount: () => {
+                        log('crm', 'getTodayCallsCount', crmState.calls);
+                        return Promise.resolve(crmState.calls);
+                    },
+                    getTodayChatsCount: () => {
+                        log('crm', 'getTodayChatsCount', crmState.chats);
+                        return Promise.resolve(crmState.chats);
+                    },
+                    getTodayEmailsCount: () => {
+                        log('crm', 'getTodayEmailsCount', crmState.emails);
+                        return Promise.resolve(crmState.emails);
+                    },
+                    openMyCallsToday: () => {
+                        log('crm', 'openMyCallsToday');
+                        revealCrmState();
+                    },
+                    openMyChatsToday: () => {
+                        log('crm', 'openMyChatsToday');
+                        revealCrmState();
+                    },
+                    openMyEmailsToday: () => {
+                        log('crm', 'openMyEmailsToday');
+                        revealCrmState();
+                    },
+                    bringAppToFront: () => log('crm', 'bringAppToFront'),
+                    enableClickToDial: () => {
+                        clickToDialEnabled = true;
+                        updateActions();
+                        log('crm', 'enableClickToDial');
+                    },
+                    disableClickToDial: () => {
+                        clickToDialEnabled = false;
+                        updateActions();
+                        log('crm', 'disableClickToDial');
+                    }
+                });
+            }
+
+            function requireSdk() {
+                if (!interactionApi) {
+                    log('error', 'SDK unavailable', 'five9.crm.sdk.js is not loaded.');
+                    return false;
+                }
+                if (!adapterReady) {
+                    log('error', 'Adapter is not ready', 'Load the adapter and sign in first.');
+                    return false;
+                }
+                return true;
+            }
+
+            async function runSdkAction(name, action) {
+                if (!requireSdk()) {
+                    return;
+                }
+                try {
+                    const result = await action();
+                    log('host', name, result);
+                    return result;
+                } catch (error) {
+                    log('error', `${name} failed`, error instanceof Error ? error.message : error);
+                }
+            }
+
+            function registerCustomComponent() {
+                const enabled = document.getElementById('customComponentsToggle').checked;
+                if (!sdk || (!enabled && !customComponentsRegistered)) {
+                    return;
+                }
+                try {
+                    const registration = sdk.customComponentsApi().registerCustomComponents({
+                        template: enabled ? `<adt-components>
+                            <adt-component location="3rdPartyComp-li-call-tab" label="CRM testbed">
+                                <adt-input name="reference" label="CRM reference" onchange="referenceChanged"></adt-input>
+                                <adt-button name="inspect" label="Inspect call" onclick="inspectCall"></adt-button>
+                            </adt-component>
+                        </adt-components>` : '<adt-components></adt-components>',
+                        callbacks: {
+                            referenceChanged: params => log('crm', 'custom component: referenceChanged', params),
+                            inspectCall: params => log('crm', 'custom component: inspectCall', params)
+                        }
+                    });
+                    customComponentsRegistered = enabled;
+                    Promise.resolve(registration).catch(error => log('error', 'Custom component registration failed', error.message || error));
+                    log('host', 'customComponentsApi.registerCustomComponents', { enabled });
+                } catch (error) {
+                    log('error', 'Custom component registration failed', error.message);
+                }
+            }
+
+            const hookSamples = {
+                beforeDisposition: {
+                    toggle: 'beforeDispositionSample',
+                    button: 'simulateDispositionHook',
+                    params: { interactionType: 'Call', interactionId: 'sample-call', dispositionId: 'sample-disposition' }
+                },
+                beforeClickToDial: {
+                    toggle: 'beforeClickToDialSample',
+                    button: 'simulateClickToDialHook',
+                    params: { click2DialData: { clickToDialNumber: '2025550100', crmObject: demoContacts[0] } }
+                }
+            };
+
+            function hookResponse(code, message) {
+                const statusCodes = sdk && sdk.HookStatusCode || {};
+                const status = { statusCode: statusCodes[code] !== undefined ? statusCodes[code] : code };
+                if (message) {
+                    status.message = message;
+                }
+                return { status };
+            }
+
+            function finishHookDecision(code, message) {
+                if (!pendingHook) {
+                    return;
+                }
+                const request = pendingHook;
+                pendingHook = null;
+                window.clearTimeout(request.timer);
+                hookDecisionDialog.close();
+                request.resolve(hookResponse(code, message));
+            }
+
+            function runHook(name, params, source = 'adapter') {
+                log('hook', `${name} request (${source})`, params);
+                const sample = hookSamples[name];
+                const inspect = document.getElementById('hookApiToggle').checked && sample && document.getElementById(sample.toggle).checked;
+                let decision;
+                if (!inspect) {
+                    decision = Promise.resolve(hookResponse('Proceed'));
+                } else if (pendingHook) {
+                    decision = Promise.resolve(hookResponse('Error', 'Another hook request is awaiting a decision. Retry after reviewing it.'));
+                } else {
+                    decision = new Promise(resolve => {
+                        pendingHook = {
+                            name,
+                            resolve,
+                            timer: window.setTimeout(() => finishHookDecision('Error', 'Hook inspection timed out after 30 seconds.'), 30000)
+                        };
+                        document.getElementById('hookDecisionTitle').textContent = name;
+                        document.getElementById('hookRequestSource').textContent = source === 'simulation' ? 'Simulation' : 'Live adapter';
+                        document.getElementById('hookRequestPayload').textContent = safeStringify(params) || '(no payload)';
+                        document.getElementById('hookRejectReason').value = `${name} rejected by the testbed sample.`;
+                        hookDecisionDialog.showModal();
+                        document.getElementById('hookRejectReason').focus();
+                    });
+                }
+                return decision.then(response => {
+                    log('hook', `${name} response (${source})`, response);
+                    if (inspect) {
+                        document.getElementById('hookSampleResult').textContent = safeStringify({ hook: name, source, request: params, response });
+                    }
+                    return response;
+                });
+            }
+
+            function refreshHookSamples() {
+                const enabled = document.getElementById('hookApiToggle').checked;
+                document.getElementById('hookSamplesSection').classList.toggle('hidden', !enabled);
+                Object.values(hookSamples).forEach(sample => {
+                    document.getElementById(sample.button).disabled = !enabled || !document.getElementById(sample.toggle).checked;
+                });
+                if (pendingHook && (!enabled || !document.getElementById(hookSamples[pendingHook.name].toggle).checked)) {
+                    finishHookDecision('Error', 'Hook sample was disabled while awaiting a decision.');
+                }
+            }
+
+            Object.entries(hookSamples).forEach(([name, sample]) => {
+                document.getElementById(sample.toggle).addEventListener('change', refreshHookSamples);
+                document.getElementById(sample.button).addEventListener('click', () => runHook(name, sample.params, 'simulation'));
+            });
+            document.getElementById('proceedHookButton').addEventListener('click', () => finishHookDecision('Proceed'));
+            document.getElementById('rejectHookButton').addEventListener('click', () => {
+                finishHookDecision('Error', document.getElementById('hookRejectReason').value.trim() || 'Rejected by the testbed sample.');
+            });
+            hookDecisionDialog.addEventListener('cancel', event => {
+                event.preventDefault();
+                finishHookDecision('Error', 'Hook inspection was dismissed.');
+            });
+            hookDecisionDialog.addEventListener('close', () => {
+                if (!hookDecisionDialog.open) {
+                    finishHookDecision('Error', 'Hook inspection was closed.');
+                }
+            });
+            refreshHookSamples();
+
+            function registerHooks() {
+                if (hooksRegistered || !hookApi) {
+                    return;
+                }
+                const hookNames = [
+                    'beforeClickToDial', 'beforeMakeCall', 'beforeMakePreviewCall', 'beforePreviewDial',
+                    'beforeConference', 'beforeTransfer', 'beforeRecord', 'beforeDisposition',
+                    'beforeObjectVisited', 'beforeSuggestedNumbers',
+                    'beforeSearch', 'afterSearch', 'beforeScreenPop', 'afterScreenPop',
+                    'beforeSaveLog', 'afterSaveLog'
+                ];
+                hookApi.registerApi(hookNames.reduce(function (handlers, name) {
+                    handlers[name] = function (params) {
+                        return runHook(name, params);
+                    };
+                    return handlers;
+                }, {}));
+                hooksRegistered = true;
+                log('host', 'hookApi.registerApi', hookNames);
+            }
+
+            /* ---------- Actions ---------- */
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                let url;
+                try {
+                    url = buildAdapterUrl();
+                } catch (error) {
+                    log('error', 'Invalid adapter configuration', error.message);
+                    return;
+                }
+                resetAdapterState();
+                adapterLoaded = true;
+                resolvedUrl.textContent = url;
+                copyIframeButton.disabled = false;
+                setLoginState('loading');
+                if (document.getElementById('hookApiToggle').checked) {
+                    registerHooks();
+                }
+                registerCustomComponent();
+                frame.src = url;
+                log('host', 'Adapter loaded', url);
+            });
+
+            document.getElementById('unloadAdapterButton').addEventListener('click', function () {
+                adapterLoaded = false;
+                resetAdapterState();
+                frame.src = 'about:blank';
+                resolvedUrl.textContent = '-';
+                copyIframeButton.disabled = true;
+                exitFocusMode();
+                setLoginState('idle');
+                log('host', 'Adapter unloaded');
+            });
+
+            copyIframeButton.addEventListener('click', function () {
+                copyText(buildIframeMarkup()).then(function () {
+                    copyIframeButton.textContent = 'Copied';
+                    log('host', 'Full iframe markup copied');
+                    window.setTimeout(function () {
+                        copyIframeButton.textContent = 'Copy full iframe';
+                    }, 1600);
+                }, function (error) {
+                    log('error', 'Unable to copy iframe markup', error.message);
+                });
+            });
+
+            document.getElementById('clickToDialButton').addEventListener('click', function () {
+                if (!requireSdk() || clickToDialEnabled === false) {
+                    return;
+                }
+                const click2DialData = {
+                    clickToDialNumber: document.getElementById('dialNumber').value.trim(),
+                    crmObject: demoContacts[0]
+                };
+                const campaign = document.getElementById('campaignName').value.trim();
+                if (!click2DialData.clickToDialNumber) {
+                    log('error', 'Phone number is required');
+                    return;
+                }
+                if (campaign) {
+                    click2DialData.preselectedCampaignName = campaign;
+                }
+                if (document.getElementById('useCurrentCampaign').checked) {
+                    click2DialData.useCurrentlySelectedCampaign = true;
+                }
+                runSdkAction('interactionApi.click2dial', () => {
+                    log('host', 'click2dial request', click2DialData);
+                    return interactionApi.click2dial({ click2DialData: click2DialData });
+                });
+            });
+
+            document.getElementById('objectVisitedButton').addEventListener('click', function () {
+                if (!requireSdk()) {
+                    return;
+                }
+                const crmObject = { id: '456', label: 'Case', name: 'Broken microwave', isWho: false, isWhat: true };
+                runSdkAction('interactionApi.objectVisited', () => interactionApi.objectVisited({ crmObject: crmObject }));
+            });
+
+            document.getElementById('presenceButton').addEventListener('click', function () {
+                if (!requireSdk()) {
+                    return;
+                }
+                runSdkAction('presenceApi.getPresence', () => presenceApi.getPresence());
+            });
+
+            document.getElementById('metadataButton').addEventListener('click', function () {
+                if (!requireSdk()) {
+                    return;
+                }
+                runSdkAction('interactionApi.getMetadata', () => interactionApi.getMetadata());
+            });
+
+            document.getElementById('suggestedNumbersButton').addEventListener('click', function () {
+                const number = document.getElementById('dialNumber').value.trim();
+                if (!number) {
+                    log('error', 'Phone number is required');
+                    return;
+                }
+                const params = { suggestedNumbers: [{ clickToDialNumber: number, crmObject: demoContacts[0] }] };
+                runSdkAction('crmApi.suggestedNumbers', () => {
+                    log('host', 'suggestedNumbers request', params);
+                    return crmApi.suggestedNumbers(params);
+                });
+            });
+
+            activeCall.addEventListener('change', clearCallDetails);
+            cavSelect.addEventListener('change', function () {
+                const variable = callVariables.find(item => String(item.id) === cavSelect.value);
+                document.getElementById('cavValue').value = variable ? variable.value ?? '' : '';
+                updateActions();
+            });
+            dispositionSelect.addEventListener('change', updateActions);
+
+            async function readCallData(method, select, placeholder) {
+                const interactionId = activeCall.value;
+                if (!activeCalls.has(interactionId)) {
+                    return;
+                }
+                const revision = callRevision;
+                const params = method === 'getCav' ? { interactionId } : { interactionType: 'Call', interactionId };
+                const result = await runSdkAction(`interactionApi.${method}`, () => {
+                    log('host', `${method} request`, params);
+                    return interactionApi[method](params);
+                });
+                if (revision !== callRevision || !adapterReady || !Array.isArray(result)) {
+                    return;
+                }
+                select.replaceChildren(new Option(placeholder, ''));
+                result.forEach(item => {
+                    if (item.id !== undefined && item.id !== null) {
+                        select.add(new Option(`${item.name || item.label || item.id} (${item.id})`, String(item.id)));
+                    }
+                });
+                if (method === 'getCav') {
+                    callVariables = result;
+                    document.getElementById('cavValue').value = '';
+                }
+                updateActions();
+            }
+
+            document.getElementById('getCavButton').addEventListener('click', () => readCallData('getCav', cavSelect, 'Select a variable'));
+            document.getElementById('getDispositionsButton').addEventListener('click', () => readCallData('getDispositions', dispositionSelect, 'Select a disposition'));
+
+            async function writeCallData(method, params) {
+                if (!requireSdk() || writePending || !activeCalls.has(params.interactionId)) {
+                    return;
+                }
+                const action = method === 'setDisposition' ? 'Set disposition (this may finish the call)' : 'Set call variable';
+                if (!window.confirm(`${action} for call ${params.interactionId}?\n${safeStringify(params)}`)) {
+                    return;
+                }
+                writePending = true;
+                updateActions();
+                try {
+                    await runSdkAction(`interactionApi.${method}`, () => {
+                        log('host', `${method} request`, params);
+                        return interactionApi[method](params);
+                    });
+                } finally {
+                    writePending = false;
+                    updateActions();
+                }
+            }
+
+            document.getElementById('setCavButton').addEventListener('click', function () {
+                if (cavSelect.value) {
+                    writeCallData('setCav', {
+                        interactionId: activeCall.value,
+                        cavList: [{ id: cavSelect.value, value: document.getElementById('cavValue').value }]
+                    });
+                }
+            });
+
+            document.getElementById('setDispositionButton').addEventListener('click', function () {
+                if (!dispositionSelect.value) {
+                    return;
+                }
+                const params = { interactionType: 'Call', interactionId: activeCall.value, dispositionId: dispositionSelect.value };
+                const timeout = document.getElementById('dispositionTimeout').value.trim();
+                if (timeout) {
+                    params.timeout = timeout;
+                }
+                writeCallData('setDisposition', params);
+            });
+
+            fis2Toggle.addEventListener('change', function () {
+                fis2Options.classList.toggle('hidden', !fis2Toggle.checked);
+                refreshPreview();
+            });
+            const hookApiToggle = document.getElementById('hookApiToggle');
+            hookApiToggle.addEventListener('change', function () {
+                document.getElementById('hookApiOptions').classList.toggle('hidden', !hookApiToggle.checked);
+                refreshHookSamples();
+            });
+            form['adapterUrl'].addEventListener('input', refreshPreview);
+            form.addEventListener('change', refreshPreview);
+            form['ssoLoginUrl'].addEventListener('input', function () {
+                refreshSsoOptions();
+                refreshPreview();
+            });
+            refreshSsoOptions();
+            refreshPreview();
+
+            /* ---------- Dock / undock / drag ---------- */
+
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+
+            dockButton.addEventListener('click', function () {
+                const undocking = panel.classList.contains('is-docked');
+                panel.classList.toggle('is-docked', !undocking);
+                panel.classList.toggle('is-undocked', undocking);
+                dockButton.textContent = undocking ? 'Dock' : 'Undock';
+                if (undocking) {
+                    panel.style.left = `${Math.max(12, Math.min(window.innerWidth - panel.offsetWidth - 12, window.innerWidth * .55))}px`;
+                    panel.style.top = '12px';
+                } else {
+                    panel.style.left = '';
+                    panel.style.top = '';
+                    panel.style.width = '';
+                    panel.style.height = '';
+                }
+            });
+
+            panelHeader.addEventListener('pointerdown', function (e) {
+                if (!panel.classList.contains('is-undocked') || e.target.closest('button')) {
+                    return;
+                }
+                const rect = panel.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+                panel.classList.add('is-dragging');
+                panelHeader.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            panelHeader.addEventListener('pointermove', function (e) {
+                if (!panel.classList.contains('is-dragging')) {
+                    return;
+                }
+                panel.style.left = `${Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, e.clientX - dragOffsetX))}px`;
+                panel.style.top = `${Math.max(0, Math.min(window.innerHeight - panelHeader.offsetHeight, e.clientY - dragOffsetY))}px`;
+            });
+
+            ['pointerup', 'pointercancel'].forEach(function (type) {
+                panelHeader.addEventListener(type, function (e) {
+                    panel.classList.remove('is-dragging');
+                    if (panelHeader.hasPointerCapture(e.pointerId)) {
+                        panelHeader.releasePointerCapture(e.pointerId);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

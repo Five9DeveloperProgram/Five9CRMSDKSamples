@@ -2,13 +2,17 @@
   "name": "Demo-crm",
   "version": "0.0.1",
   "private": true,
-  "scripts": {
-    "start": "app"
+  "engines": {
+    "node": ">=22"
   },
-  "dependencies": {},
+  "scripts": {
+    "prepare:site": "node scripts/prepare-site.js",
+    "start": "npm run prepare:site && http-server _site -a localhost -p 8080 -c-1 --no-dotfiles -d false -o /embedded-sample-2026.html",
+    "start:https": "npm start -- --ssl --cert ../five9-localhost.pem --key ../five9-localhost-key.pem",
+    "test": "playwright test"
+  },
   "devDependencies": {
-    "gulp": "^3.9.1",
-    "browser-sync": "^2.14.0",
-    "minimist": "^1.2.0"
+    "@playwright/test": "^1.56.0",
+    "http-server": "^14.1.1"
   }
 }
