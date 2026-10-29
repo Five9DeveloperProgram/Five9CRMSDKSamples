@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -24,14 +27,27 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test
-      - name: Stage the standalone testbed only
-        run: npm run prepare:site
+      - name: Check out the isolated Brad mode sample
+        uses: actions/checkout@v4
+        with:
+          ref: brad-mode
+          path: _brad-mode
+          persist-credentials: false
+      - name: Install Brad mode test dependencies
+        working-directory: _brad-mode
+        run: npm ci
+      - name: Test Brad mode
+        working-directory: _brad-mode
+        run: npm test
+      - name: Stage both standalone samples
+        run: npm run prepare:site -- _brad-mode
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       pages: write

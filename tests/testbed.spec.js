@@ -1,4 +1,8 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 test.beforeEach(async ({ page }) => {
     await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({ contentType: 'text/css', body: '.hidden { display: none; }' }));
@@ -39,6 +43,34 @@ test('preview serves only the staged testbed', async ({ request }) => {
     expect(await root.text()).toContain('Embedded Adapter Testbed');
     for (const resource of ['/.git/config', '/package.json', '/node_modules/http-server/package.json', '/tests/testbed.spec.js', '/../package.json', '/%2e%2e/package.json']) {
         expect((await request.get(resource)).status()).toBe(404);
+    }
+});
+
+test('Pages staging isolates both samples and enables Brad mode only under its own path', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'crm-pages-'));
+    const sample = 'embedded-sample-2026.html';
+    try {
+        fs.mkdirSync(path.join(root, 'scripts'));
+        fs.mkdirSync(path.join(root, 'experiment'));
+        fs.copyFileSync(path.join(__dirname, '../scripts/prepare-site.js'), path.join(root, 'scripts/prepare-site.js'));
+        fs.writeFileSync(path.join(root, sample), '<title>Main sample</title>');
+        fs.writeFileSync(path.join(root, 'experiment', sample), '<title>Brad sample</title>');
+        fs.writeFileSync(path.join(root, 'experiment', 'private.pem'), 'not for publishing');
+        const stage = (...args) => execFileSync(process.execPath, ['scripts/prepare-site.js', ...args], { cwd: root, stdio: 'pipe' });
+        stage('experiment');
+        const output = path.join(root, '_site');
+        expect(fs.readdirSync(output).sort()).toEqual(['brad-mode', sample, 'index.html'].sort());
+        expect(fs.readFileSync(path.join(output, 'index.html'), 'utf8')).toBe('<title>Main sample</title>');
+        expect(fs.readFileSync(path.join(output, sample), 'utf8')).toBe('<title>Main sample</title>');
+        expect(fs.readdirSync(path.join(output, 'brad-mode')).sort()).toEqual([sample, 'index.html'].sort());
+        expect(fs.readFileSync(path.join(output, 'brad-mode', sample), 'utf8')).toBe('<title>Brad sample</title>');
+        expect(fs.readFileSync(path.join(output, 'brad-mode', 'index.html'), 'utf8')).toContain(`content="0;url=./${sample}?fun=brad"`);
+        expect(() => stage('missing-branch')).toThrow();
+        expect(fs.existsSync(path.join(output, 'brad-mode', sample))).toBe(true);
+        stage();
+        expect(fs.readdirSync(output).sort()).toEqual([sample, 'index.html'].sort());
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
     }
 });
 

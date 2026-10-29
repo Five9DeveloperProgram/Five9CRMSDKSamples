@@ -35,7 +35,7 @@ Open <https://localhost:8080/embedded-sample-2026.html>. Certificate trust setup
 
 ## GitHub Pages
 
-The [Pages workflow](.github/workflows/pages.yml) runs the browser tests, stages the testbed, and deploys `_site/` over HTTPS. No backend server, personal access token, or Five9 secret is required. Deployment uses GitHub's built-in token with scoped Pages permissions.
+The [Pages workflow](.github/workflows/pages.yml) checks out and tests both `main` and `brad-mode`, stages their standalone samples separately, and deploys `_site/` over HTTPS. Both branches must exist on GitHub. No backend server, personal access token, or Five9 secret is required. Deployment uses GitHub's built-in token with scoped Pages permissions.
 
 ### First deployment
 
@@ -48,11 +48,21 @@ The expected default URL for this repository is <https://five9developerprogram.g
 
 Future pushes to `main` deploy automatically. For a fork with a different default branch, update the workflow's branch filter. Keep any `github-pages` environment deployment rules and branch protections consistent with the publishing branch.
 
+### Separate Brad mode preview
+
+The normal sample comes from `main` and remains at <https://five9developerprogram.github.io/Five9CRMSDKSamples/>. The experimental sample comes from `brad-mode` and is published at <https://five9developerprogram.github.io/Five9CRMSDKSamples/brad-mode/>. Its index redirects to the experimental HTML with `?fun=brad`, enabling fun mode without changing the normal sample.
+
+Push this publishing workflow to `main` for the first combined deployment. After subsequent updates to `brad-mode`, manually run **Test and deploy testbed to GitHub Pages** on `main` to refresh both versions. Pushes to `brad-mode` do not deploy automatically. Keep publishing changes on `main`; do not run the old workflow from the experimental branch, since it publishes a different artifact. The updated workflow permits deployment only from `main`.
+
+Both test suites must pass before publishing. A missing branch or failing test stops the deployment and leaves the previous live site in place. The workflow never merges experimental application code into `main`.
+
+For a combined local preview, check out `brad-mode` in a separate directory and run `npm run prepare:site -- /path/to/brad-checkout`. With the existing preview server running, open <http://localhost:8080/brad-mode/>. Ordinary `npm start` and `npm test` regenerate the default, single-sample staging directory; rerun the combined staging command afterward when needed.
+
 ### Hosting checks
 
 - Treat the page as public unless your organization has explicitly configured Pages access control. A private repository does not by itself establish the site's audience.
 - Do not embed credentials, customer records, or sensitive SSO URLs in the source or workflow. Authentication stays with Five9 and your IdP.
-- Confirm the artifact contains only the two staged HTML files. Local dependencies, documentation, tests, and private keys must not be published.
+- Confirm the artifact contains exactly four HTML files: the main sample and its index at the root, plus the experimental sample and its redirect index under `brad-mode/`. Local dependencies, documentation, tests, and private keys must not be published. Local staging without an experimental source still contains only the original two files.
 - Validate Five9/IdP framing, browser storage, microphone access, and any trusted-origin configuration using the actual deployed origin. HTTPS does not bypass those requirements.
 - Check the Actions logs for failing tests, Pages permissions, disabled Pages, or environment approval requirements if deployment fails.
 
