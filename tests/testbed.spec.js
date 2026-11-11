@@ -100,7 +100,7 @@ test('SSO and RelayState survive nested encoding', async ({ page }) => {
     expect(idp.searchParams.getAll('RelayState')).toHaveLength(1);
     expect(idp.hash).toBe('#login');
     expect(relay.searchParams.get('f9idplogin')).toBe('true');
-    expect(relay.searchParams.get('f9crmapi')).toBe('true');
+    expect(relay.searchParams.has('f9crmapi')).toBe(false);
     expect(adapter.searchParams.get('autoSsoLogin')).toBe('true');
 });
 
@@ -264,7 +264,7 @@ test('regional adapter presets update the SSO preview without navigating the ada
     expect(relay.origin).toBe('https://app.ca.five9.com');
     expect(relay.pathname).toBe('/clients/integrations/sfli.main.html');
     expect(relay.searchParams.get('f9idplogin')).toBe('true');
-    expect(relay.searchParams.getAll('f9hookapi')).toEqual(['true']);
+    expect(relay.searchParams.has('f9hookapi')).toBe(false);
     await expect(page.locator('#adapterFrame')).not.toHaveAttribute('src');
 });
 

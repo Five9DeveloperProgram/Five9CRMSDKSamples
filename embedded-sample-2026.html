@@ -730,6 +730,7 @@
                 if (fis2Toggle.checked) {
                     const relayState = parseHttpUrl(adapterUrl);
                     if (!isFusionUrl(relayState)) {
+                        ['f9crmapi', 'f9hookapi', 'f9verticalthreshold', 'idpLoginUrl', 'autoSsoLogin'].forEach(name => relayState.searchParams.delete(name));
                         relayState.searchParams.set('f9idplogin', 'true');
                     }
                     url.searchParams.set('RelayState', relayState.href);
